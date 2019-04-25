@@ -1,0 +1,31 @@
+'CR1000 Series Datalogger
+
+'Declare Public Variables
+Public Int_Temp As Float
+Public batt_volt As Float
+
+Public Air_Temp
+Public Switch_Count
+  
+
+'Define Data Tables
+
+
+'Main Program
+BeginProg
+	Scan (1,Sec,0,0)
+		PanelTemp (Int_Temp,_50Hz) 'panel temp measurement
+		Battery (batt_volt)        'Battery voltage measurement
+		TCDiff (Air_Temp,1,mV2_5C,5,TypeT,Int_Temp,True,0,_50Hz,1.0,0) 'Type T thermocouple meas on diff
+		PulseCount (Switch_Count,1,1 ,2,0,0.2,0) ' Switch count on pulse channel
+		
+		If Air_Temp > 26 Then ' if the air temp rises above 26 then
+		  PortSet (8,1 )      ' turn on the LED	  
+		  Else                 ' otherwise
+		    PortSet (8,0)       ' turn off the LED
+		EndIf 
+	
+		 	
+	NextScan
+EndProg
+
