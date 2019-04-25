@@ -1,0 +1,547 @@
+'*********************************'
+'CR1000 Series Datalogger
+'date of modification: 
+'Serial Data out ten minute
+'via com2
+'send data via SMS 
+'Program Author: roy handoko-bmkg
+'********************************
+'********************************
+'Wiring Diagram:
+'*************************************************************************
+' Sensor: RMY 03002 Wind Sentry
+'-------------|-----------------|------------------|
+' Wire Colour | Function        | CR1000 Connection|	
+'-------------|-----------------|------------------|
+' Red         | Wind Spd Sig.   | P1               | 
+' Black       | Wind Spd Ref.   | AG               |
+' Clear       | Shield          | AG               | 
+' Green       | Wind Dir Sig.   | SE16             |  
+' White       | Wind Dir Excite | VX1              |  
+
+' HMP 155 Humidity and Temp. Sensor
+' White       | Temp Sig.       | SE2              |  
+' Yellow      | RH   Sig.       | SE1              |  
+' Green       | Signal Ref      | AG               |  
+' Blue        | Power           | 12V              |  
+' Red         | Power Ground    | G                |  
+
+'Vaisala PTB100B Barometric Pressure 
+'White        | VOUT/TX         | SE11             |		
+' Green       | Sig Ref         | SE12             |			
+' Red         | PWR             | 12V              |		
+' Black       | PWR Ground      | G                |		
+' Shield      | Reference       | A                |	
+
+' CM3 Pyranometer
+' Red         | Signal          | Def3(H)          |  
+' Blue        | Signal Ref      | Def3(L)          | 
+' Black       | Signal GND      | AG               |
+
+' Tipping Bucket Rain Gauge
+' Red         | Signal          | P2               | 
+' Black       | Signal Return   | G                | 
+
+'***************************************************
+'Declare Public Variables
+'Example:
+Const OUTPUTPORT1 = ComRS232
+Const OUTPUTPORT2 = Com1
+Const OUTPUTPORT3 = Com3
+Public PTemp      'Internal pannel temperature
+Public batt_volt  'Battery voltage
+Public WS_meas    'Wind speed
+Public WD_meas    'Wind direction
+Public TA_meas    'Temperature Measurement 
+Public RH_meas    'Relative Humidity measurement
+Public PA_meas    'Barometric Pressure
+Dim QFF_offset
+Public PA_QFF_Csi   'Barometric Pressure adjusted to sea level
+Public SR_meas    'Solar Radiation
+Public PR_meas_Total 'Total Rain
+Public SlrMJ      'Solar Radiation in MJ/m2
+Public SlrCal     'Solar Radiation in Cal/m2
+Public PA_QFE     'Barometric pressure adjusted to runway or station level 
+Public PA_QNH     'Barometric pressure adjusted to sea level in  accordance  with  the  specified condition of ICAO standard atmosphere
+Public PA_QFF     'Barometric Pressure adjusted to sea level 
+'Public SD        'Sunlight duration per 24 hours
+'Dim NR_Wm2
+'Public NR_meas   'Net Radiation Measurement
+
+
+
+'deklarasi unit
+Units WS_meas = m/s
+Units WD_meas = deg
+Units TA_meas = degC
+Units RH_meas = %
+Units PA_meas = mbar
+Units PA_QFF_Csi = mbar
+Units SR_meas = W/m2
+Units SlrMJ = MJ/m2
+Units SlrCal = Cal/m2
+Units PA_QFE = mbar 
+Units PA_QNH = mbar
+Units PA_QFF = mbar
+
+Public PR_meas            'Rain measurement
+Units PR_meas = mm
+Public RainIntensity5min  '5 minute rainfall intensity
+Dim rfAvg                 'Running average to calculate intensity
+Public rain10min          '10 minute intensity
+Public rainHourly         '60 min intensity
+Public RainDaily
+Dim DisableRainfall_10 As Boolean
+Dim DisableRainfall_Hour As Boolean
+
+
+Units PR_meas_Total = mm
+Public DP_meas       'Dew Point
+Units DP_meas = deg c
+Dim VAP_Pres
+Dim SAT_VP
+'=========
+
+Public ws_knot
+Public ws_Kph
+Units ws_knot = Knots
+Units ws_Kph = KM/Jam
+'=========
+'DEKLARASI CURAH HUJAN
+Dim hujan
+Dim ch
+Dim chharian
+'=========
+
+
+'deklarasi output data   
+Public tenmenit_out (12)
+Public menit_out (12)
+Public tensec_out (12)
+Public tensec_msg_out As String * 100
+Public menit_msg_out As String * 100
+Public tenmenit_msg_out As String * 100
+Public time (9)
+Public days As String, months As String, years As String
+Public hours As String, minutes As String, seconds As String
+Public avTA_out As String
+Public avRH_out As String 
+Public avPA_out As String
+Public avSR_out As String
+'Public avNR_out As String
+Public avWSmeas_out As String
+Public avWDmeas_out As String
+Public tot_ch_out As String
+
+'Declare Other Variables
+'deklarasi perhitungan QFE, QFF, dan QNH
+Dim xQFE 
+Dim dQNH
+Dim xQNH
+Dim xQFF
+
+Public MultV1, MultV2, MultV3
+Public OffsetV1, OffsetV2, OffsetV3
+Public Mode1, mode2, mode3 
+Public KnownValue1, KnownValue2, KnownValue3
+
+
+'Deklarasi ouput data via com2
+'Declare Constants
+Const scan_rate = 1
+'Const NRLite_Cal = 1000/13.1  'Calibration constant shipped with the NR-Lite  --> Cal constant is the denominator x eg: 1000/xx.x
+'Const A = 0.021286   'Empirical constand for NR-lite wind correction
+Const smsphone="+6287780871486"
+Const SMSPORT=Com2
+Const CR=CHR(13)
+Const LF=CHR(10)
+Const CRLF=CR+LF
+
+'====== THESE CONSTANTS NEED TO BE CHANGED TO SITE SPECIFIC VALUES ============
+Const LATITUDE  = 1   ' Latitude of the site
+Const LONGTITUDE = 1  'Longitude of the site
+Const ALTITUDE = 1   'Altitude of the site above sea level in m ()
+Const SENSORLEVEL = 1 'Pressure sensor height from station or runway level in m
+Const b = 0.0086 'deg C/m for QFE and QFF calculation
+Const c = 0.00325 'deg C/m for QNH calculation
+
+'Define Data Tables
+DataTable (tensec,1,-1)
+  DataInterval (0,10,Sec,10)
+  Average (1,TA_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,PA_QFE,IEEE4,False)
+  Average (1,PA_QFF_Csi,IEEE4,False)
+  Average (1,PA_QNH,IEEE4,False)
+  Average (1,SR_meas,IEEE4,False)
+  WindVector (1,WS_meas,WD_meas,FP2,False,0,0,1)
+  'Average (1,WS_meas,IEEE4,False)
+  'Average (1,WD_meas,FP2,False)
+  Sample (1,PR_meas,FP2)
+  Sample (1,PR_meas_Total,FP2)
+EndTable
+DataTable (menitan,1,-1)
+  DataInterval (0,1,Min,10)
+  Average (1,TA_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,PA_QFE,IEEE4,False)
+  Average (1,PA_QFF_Csi,IEEE4,False)
+  Average (1,PA_QNH,IEEE4,False)
+  Average (1,SR_meas,IEEE4,False)
+  WindVector (1,WS_meas,WD_meas,FP2,False,0,0,1)
+  'Average (1,WS_meas,IEEE4,False)
+  'Average (1,WD_meas,FP2,False)
+  Sample (1,PR_meas,FP2)
+  Sample (1,PR_meas_Total,FP2)
+EndTable
+
+DataTable (menitsms,1,-1)
+  'Sample (1,rtime,Nsec)
+  DataInterval (0,10,Sec,10)
+  Average (1,TA_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,SR_meas,IEEE4,False)
+  WindVector (1,WS_meas,WD_meas,FP2,False,0,0,1)
+  'Average (1,WS_meas,IEEE4,False)
+  'Average (1,WD_meas,FP2,False)
+  Sample (1,PR_meas,FP2)
+  Sample (1,PR_meas_Total,FP2)
+EndTable
+
+DataTable (L0,1,-1)
+  DataInterval (0,10,Min,10)
+  Average (1,TA_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,PA_QFE,IEEE4,False)
+  Average (1,PA_QNH,IEEE4,False)
+  Average (1,PA_QFF_Csi,IEEE4,False)
+  Average (1,SR_meas,IEEE4,False)
+  Average (1,SlrMJ,IEEE4,False)
+  'Average (1,NR_meas,FP2,False)
+  Maximum (1,WS_meas,IEEE4,False,False)
+  Average (1,WS_meas,IEEE4,False)
+  Minimum (1,WS_meas,IEEE4,False,False)
+ '============================= m/s to knot
+  Maximum (1,ws_knot,IEEE4,False,False)
+  Average (1,ws_knot,IEEE4,False)
+ '==============================
+  Average (1,WD_meas,FP2,False)
+  WindVector (1,WS_meas,WD_meas,IEEE4,False,0,0,0)
+  Sample (1,rain10min * 6,FP2)
+  FieldNames ("RainIntensity:mm/hour")
+  Maximum (1,RainIntensity5min,FP2,DisableRainfall_10,False)
+EndTable
+
+DataTable (L1,1,-1)
+  DataInterval (0,1,Hr,10)
+  Sample (1,PTemp,FP2)
+  Average (1,TA_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,PA_QFE,IEEE4,False)
+  Average (1,PA_QNH,IEEE4,False)
+  Average (1,PA_QFF_Csi,IEEE4,False)
+  Average (1,SR_meas,IEEE4,False)
+  'Average (1,NR_meas,FP2,False)
+  Maximum (1,WS_meas,IEEE4,False,False)
+  Average (1,WS_meas,IEEE4,False)
+  Minimum (1,WS_meas,IEEE4,False,False)
+ '============================= m/s to knot
+  Maximum (1,ws_knot,IEEE4,False,False)
+  Average (1,ws_knot,IEEE4,False)
+ '==============================
+  Average (1,WD_meas,FP2,False)
+  WindVector (1,WS_meas,WD_meas,IEEE4,False,0,0,0)
+  Sample (1,rainHourly,FP2)
+  FieldNames ("CH_1Jam")
+  Maximum (1,RainIntensity5min,FP2,DisableRainfall_Hour,False)
+  Totalize (1,PR_meas,FP2,False)
+EndTable
+
+'================================
+DataTable (L2,1,-1)'True,365)
+  DataInterval(0,1,Day,10)
+  Sample (1,PTemp,FP2)
+  Average (1,TA_meas,FP2,False)
+  Maximum(1,TA_meas,FP2,False,False)
+  Minimum(1,TA_meas,FP2,False,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,PA_QFE,IEEE4,False)
+  Average (1,PA_QNH,IEEE4,False)
+  Average (1,PA_QFF_Csi,IEEE4,False)
+  Average (1,SR_meas,IEEE4,False)
+  'Average (1,NR_meas,FP2,False)
+  Maximum (1,WS_meas,IEEE4,False,False)
+  Average (1,WS_meas,IEEE4,False)
+  Minimum (1,WS_meas,IEEE4,False,False)
+  Average (1,WD_meas,FP2,False)
+  Average (1,ws_knot,IEEE4,False)
+  Maximum (1,ws_knot,IEEE4,False,False)
+  WindVector (1,WS_meas,WD_meas,IEEE4,False,0,0,0)
+  Sample (1,rainHourly,FP2)
+  FieldNames ("RainIntensity:mm/hour")
+  Maximum (1,RainIntensity5min,FP2,DisableRainfall_Hour,False)
+  Totalize (1,SlrMJ,IEEE4,False)
+  Totalize (1,SlrCal,IEEE4,False)
+  Totalize(1,PR_meas,FP2,False)
+EndTable
+'================================
+'================================
+
+'Define Subroutines
+'Sub
+'EnterSub instructions here
+'EndSub
+
+'Main Program
+BeginProg
+SerialOpen (OUTPUTPORT1,9600,0,0,100)
+SerialOpen (OUTPUTPORT2,9600,0,0,100)
+SerialOpen (OUTPUTPORT3,9600,0,0,100)
+SerialOpen (SMSPORT,9600,0,0,100)
+
+
+  LoadFieldCal (True)
+
+  'KnownVar = 0
+  'KnownRH = 0
+  'KnownPress = 0
+  Scan (scan_rate,Sec,3,0)
+ 
+  RealTime (time())
+  days = FormatFloat (time(3),"%02.0f")
+  months = FormatFloat (time(2),"%02.0f")
+  years = FormatFloat (time(1),"%02.0f")
+  hours = FormatFloat (time(4),"%02.0f")
+  minutes = FormatFloat (time(5),"%02.0f")
+  seconds = FormatFloat (time(6),"%02.0f")
+
+    If IfTime(0,10,Min) Then DisableRainfall_10 = True
+    If IfTime(5,10,Min) Then DisableRainfall_10 = False
+    If IfTime(0,60,Min) Then DisableRainfall_Hour = True
+    If IfTime(5,60,Min) Then DisableRainfall_Hour = False
+
+    PanelTemp (PTemp,250)
+    Battery (batt_volt)
+    'Alarm Batteray volt
+    Public batt_voltalarm 
+    batt_voltalarm = 12
+	  If batt_volt >= batt_voltalarm Then
+	        PortSet (8,1 )
+	      	Else
+	        PortSet (8,0)
+	        EndIf
+	  Public PortOnflag As Boolean
+	  Public NOTPortOnFlag As Boolean
+	  If batt_volt >= batt_voltalarm Then
+      		PortOnflag = NOTPortOnFlag
+      		PortSet (8,PortOnflag)
+      		Else
+      		PortSet (8,NOTPortOnFlag)
+    EndIf
+
+    '03002 Measurements
+    'wind speed
+    PulseCount (WS_meas,1,1 ,1,1,0.75,0.2)
+    If WS_meas <0.21 Then WS_meas = 0 'If windspeed is below the threshold then it is zero
+    ws_knot = WS_meas * 1.942 ' convert m/s to knots 
+    ws_Kph = WS_meas * 3.6  ' convert m/s to KM/Jam 
+    'wind direction
+    BrHalf (WD_meas,1,mV2500,16,Vx1,1,2500,True ,0,_50Hz,352,0)
+    If WD_meas >= 360 OR WD_meas <0 Then WD_meas = 0 'Correction for wind direction.
+
+    'Temperature RH Measurments
+    'PortSet (5,1)
+    VoltSe (TA_meas,1,mV2500,2,0,0,_50Hz,0.14,OffsetV1)
+    VoltSe (RH_meas,1,mV2500,1,0,0,_50Hz,0.1,OffsetV2)
+    
+    'PortSet (5,0)
+	      If RH_meas<0 Then RH_meas=0
+	      If RH_meas>100 AND RH_meas<108 Then RH_meas=100
+    
+    'Calculate Dew Point
+    DewPoint (DP_meas,TA_meas,RH_meas)
+
+    'Pressure Measurement
+    'If TimeIntoInterval(0,10,Sec) Then
+      'PortSet (1,1)
+      VoltDiff (PA_meas,1,mv5000,6,False,0,_50Hz,0.24,OffsetV3)
+      
+      'PortSet(1,0)
+    'EndIf
+    
+    'Using Altitude, calculate Barometric Pressure offset To adjust pressure To sealevel
+    QFF_offset = (1013.25*(1-(1-(ALTITUDE/44307.69231))^5.25328))  'calculate sealevel adjustment
+    PA_QFF_Csi = PA_meas + QFF_offset  'Calculate Barometric pressure corrected for sea level by Campbell Calculation
+    
+    'Tekanan dihitung berdasar ketinggian sensor tekanan dari landasan atau level stasiun dan suhu udara    
+    xQFE = SENSORLEVEL/(7996+(b*SENSORLEVEL)+(29.33*TA_meas))
+    PA_QFE = PA_meas*(EXP(1)^xQFE)
+    
+    'Perhitungan berdasar altitude dan standar tekanan permukaan laut yang mengacu pada ICAO standard atmosphere
+    dQNH = 0.19025*(LN(PA_QFE/1013.2315))
+    xQNH = 0.03416*ALTITUDE*(1-dQNH)/(288.2+c*ALTITUDE)
+    PA_QNH = PA_meas * (EXP(1)^xQNH)
+    
+    'Tekanan dihitung berdasar Altitude dan suhu udara
+    xQFF = ALTITUDE/(7996+(b*ALTITUDE)+(29.33*TA_meas))
+    PA_QFF = PA_QFE*(EXP(1)^xQFF)
+    
+    'CM3 Pyranometer Measurement
+    VoltDiff (SR_meas,1,mV25,3,True ,0,_50Hz,58.45,0) ' in W/m2 multiplier measurement 1/(C*10^3) were C is Sensivity in mV 
+    If SR_meas<0 Then SR_meas=0 'Set Negaitive Values to Zero
+    VoltDiff (SlrMJ,1,mV25,3,True ,0,_50Hz,0.00005845,0) ' in W/m2 multiplier measurement t/(C*10^9) were t=scanrate, C=Sensivity in mV
+    If SlrMJ<0 Then SlrMJ=0 'Set Negaitive Values to Zero
+    VoltDiff (SlrCal,1,mV25,3,True ,0,_50Hz,0.001396,0) ' in Cal/m2/min multiplier measurement 1.4333/(C*10^6) were t=scanrate, C=Sensivity in mV
+    If SlrCal<0 Then SlrCal=0 'Set Negaitive Values to Zero
+    
+    'SlrMJ = SR_meas*(scan_rate* 0.0002) 'Convert W/m2 to MJ/m2 for the scan interval
+    'SR_meas=SR_meas*200 'Convert mV to W/m2
+
+    'Tipping Bucket Rain gauge Measurement
+    PulseCount (PR_meas,1,2,2,0,0.5,0)
+    PR_meas_Total = PR_meas + PR_meas_Total  'Keep a running total of the PR_meas experienced by the station.
+    ch=PR_meas+ch
+    hujan =PR_meas+hujan
+    chharian = PR_meas+chharian
+    '=================
+    'keep 10 minute rainfall total
+        ''''    rain10min += PR_meas
+    rain10min = ch
+    '=================
+    'keep hourly rainfall total
+     ''''''  rainHourly += PR_meas
+    rainHourly = hujan
+    
+    RainDaily = chharian
+    'Take a 5 minute running average
+    AvgRun (rfAvg,1,PR_meas,300)
+    'Calculate the rainfall intensity in mm/hour
+    RainIntensity5min = rfAvg * 300 * 12
+    
+    CallTable tensec
+    CallTable menitan
+    CallTable menitsms
+    CallTable L0
+    CallTable L1
+    CallTable L2
+    '====================================
+    'If TimeIntoInterval (0,24,Hr) Then  
+    'Timer (1,Sec,3)
+    'EndIf
+
+    If IfTime(0,10,Min) Then 
+    rain10min = 0 
+    ch=0
+    EndIf
+
+    If IfTime(0,60,Min) Then 
+    rainHourly = 0
+    hujan=0
+    EndIf
+    
+    If TimeIntoInterval (420,1440,Min) Then  
+    'Timer (1,Sec,3)
+    PR_meas = 0
+    PR_meas_Total = 0
+    RainDaily = 0
+    chharian = 0
+    EndIf
+    
+     PortSet (9,1 )
+     If TimeIntoInterval (421,1440,Min) Then
+     PortSet (9,0)
+     EndIf
+
+  
+    '====================================
+    'data tensec out
+     If tensec.output (1.1) Then
+     GetRecord (tensec_out(),tensec,1)
+     days = FormatFloat (time(3),"%02.0f")
+     months = FormatFloat (time(2),"%02.0f")
+     years = FormatFloat (time(1),"%02.0f")
+     hours = FormatFloat (time(4),"%02.0f")
+     minutes = FormatFloat (time(5),"%02.0f")
+     seconds = FormatFloat (time(6),"%02.0f")
+     avTA_out = FormatFloat (tenmenit_out(1),"%2.1f")
+     avRH_out = FormatFloat (tenmenit_out(2),"%2.1f")
+     avPA_out = FormatFloat (tenmenit_out(3),"%6.1f")
+     avSR_out = FormatFloat (tenmenit_out(4),"%2.1f")
+     avWSmeas_out = FormatFloat (tenmenit_out(5),"%2.1f")
+     avWDmeas_out = FormatFloat (tenmenit_out(6),"%1.0f")
+     tot_ch_out = FormatFloat (tenmenit_out(8),"%2.1f")
+     'Compile
+     	tensec_msg_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avTA_out+","+avRH_out+","+avPA_out+","+avSR_out+","+tot_ch_out+CHR(10)+CHR(13)
+     SerialOut (OUTPUTPORT3,tensec_msg_out,"",0,100)
+      EndIf
+    'data tenmenitan out
+      If menitsms.output (1.1) Then
+     GetRecord (tenmenit_out(),menitsms,1)
+     'rtime = FormatFloat (menit_out(1),"%02.0f")
+     days = FormatFloat (time(3),"%02.0f")
+     months = FormatFloat (time(2),"%02.0f")
+     years = FormatFloat (time(1),"%02.0f")
+     hours = FormatFloat (time(4),"%02.0f")
+     minutes = FormatFloat (time(5),"%02.0f")
+     seconds = FormatFloat (time(6),"%02.0f")
+     avTA_out = FormatFloat (tenmenit_out(1),"%2.1f")
+     avRH_out = FormatFloat (tenmenit_out(2),"%2.1f")
+     avPA_out = FormatFloat (tenmenit_out(3),"%6.1f")
+     avSR_out = FormatFloat (tenmenit_out(4),"%2.1f")
+     avWSmeas_out = FormatFloat (tenmenit_out(5),"%2.1f")
+     avWDmeas_out = FormatFloat (tenmenit_out(6),"%1.0f")
+     tot_ch_out = FormatFloat (tenmenit_out(8),"%2.1f")
+     'Compile
+     tenmenit_msg_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avTA_out+","+avRH_out+","+avPA_out+","+avSR_out+","+tot_ch_out+CHR(10)+CHR(13)
+     'SerialOut (Com2,menit_msg_out,"",0,100)
+     SerialOut (SMSPORT,"AT+CMGS="+smsphone+CRLF,"> ",1,100)
+     SerialOut (SMSPORT,tenmenit_msg_out,"",1,10)
+     SerialOut (SMSPORT,CHR(26),"CMGS:",1,100)
+     EndIf
+     
+     'data menitan out 
+      If menitan.output (1.1) Then
+     	GetRecord (menit_out(),menitan,1)
+     	days = FormatFloat (time(3),"%02.0f")
+     	months = FormatFloat (time(2),"%02.0f")
+     	years = FormatFloat (time(1),"%02.0f")
+     	hours = FormatFloat (time(4),"%02.0f")
+     	minutes = FormatFloat (time(5),"%02.0f")
+     	seconds = FormatFloat (time(6),"%02.0f")
+     	avTA_out = FormatFloat (tenmenit_out(1),"%2.1f")
+      avRH_out = FormatFloat (tenmenit_out(2),"%2.1f")
+      avPA_out = FormatFloat (tenmenit_out(3),"%6.1f")
+      avSR_out = FormatFloat (tenmenit_out(4),"%2.1f")
+      avWSmeas_out = FormatFloat (tenmenit_out(5),"%2.1f")
+      avWDmeas_out = FormatFloat (tenmenit_out(6),"%1.0f")
+      tot_ch_out = FormatFloat (tenmenit_out(8),"%2.1f")
+     	'Compile
+     	menit_msg_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avTA_out+","+avRH_out+","+avPA_out+","+avSR_out+","+tot_ch_out+CHR(10)+CHR(13)
+     	SerialOut (OUTPUTPORT1,menit_msg_out,"",0,100)
+     	SerialOut (OUTPUTPORT2,menit_msg_out,"",0,100)
+      EndIf
+    '====================================
+    Public Suhu
+    Public RH
+    Public Tekanan
+    Suhu = TA_meas
+    RH = RH_meas
+    Tekanan = PA_meas
+    FieldCal (1,Suhu,1,MultV1,OffsetV1,Mode1,KnownValue1,1,1)
+    FieldCal (1,RH,1,MultV2,OffsetV2,mode2,KnownValue2,1,1)
+    FieldCal (1,Tekanan,1,MultV3,OffsetV3,mode3,KnownValue3,1,1)
+    
+    NextScan
+EndProg
+

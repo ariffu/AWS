@@ -1,0 +1,79 @@
+' CR1000 Series Datalogger
+'
+' Program Name: HS_Encoder.CR1
+' Author: Simon Leeds, CSA
+' Date: August 31, 2005
+'
+' Program details:
+'==================
+' This program demonstrates the use of a Rod Extensometer sensor manufactured by GeoTechnical Systems Australia.
+' This sensor can have up to 6 attachment points for extension measurements.
+' This particular unit is configured with 3 sensing elements.
+' The sensing elements are configured as potentiometers. The three sensors have a common + (top) and - (bottom) wire although they have separate sensing wires.
+' The calibration factors for these sensors are in units of mV/mm/Volt.
+' The calibration is done in this manner as it is difficult to know exactly what resistance is between the + and - point of the sensor.
+' When calibrated in this way, it is not important what the overall resistance is.
+' Wiring of Rod Extensometer
+' Red     - EX1
+' Black   - G
+' Orange  - SE1
+' White   - SE2
+' Yellow  - SE3
+'------------------------------------------------
+
+' Declare Public Variables
+'=========================
+Public Flag(8) as boolean
+Public mmExt(3)
+Public mVExt(3)
+Public Mult(3)
+
+' Declare Other Variables
+'========================
+Dim i
+
+' Declare Constants
+'===================
+Const V_Ex = 2.5					' Excitation voltage in Volts.
+Const	Cal_1 = 5.469				' Calibration for sensor #1 (mV/mm/Volt).
+Const	Cal_2 = 5.429				' Calibration for sensor #2 (mV/mm/Volt).
+Const	Cal_3 = 5.478				' Calibration for sensor #3 (mV/mm/Volt).
+
+' Define Data Tables
+'====================
+
+
+' Define Subroutines
+'====================
+
+
+' Main Program
+'==============
+
+
+BeginProg
+
+	' Calculate the multiplier for sensor #1.
+	Mult(1) = Cal_1 * V_Ex
+	' Calculate the multiplier for sensor #2.
+	Mult(2) = Cal_2 * V_Ex
+	' Calculate the multiplier for sensor #3.
+	Mult(3) = Cal_3 * V_Ex
+	' These multipliers are in units of mV/mm.
+	' If we make our measurements in mV and divide by these multipliers, we get mm.
+
+  Scan(1,Sec, 3, 0)
+
+		' Measure the sensor ouputs with a 2.5V excitation.
+
+		' 3 repetitions for 3 sensors wired in 3 consecutive channels. Multiplier is V_Ex (in mV) due to the output of the instruction being ratiometric (Vi/Vx).
+		' With a multiplier of V_Ex (in mV), we get V1 (in mV) in the public variable - this is the value that can be used with our multiplier.
+    BRHalf(mVExt(), 3, mV2500, 1, VX1, 3, 2500, False, 50000, 250, (V_Ex*1000), 0)
+
+		' Divide by the multiplier to get mm as described above.
+		For i = 1 to 3
+	    mmExt(i) = mVExt(i) / Mult(i)
+	  Next i
+     
+  NextScan
+EndProg

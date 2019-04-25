@@ -1,0 +1,29 @@
+Const Mux_Chans = 12
+Public int_temp
+Public air_temp(Mux_Chans)
+Dim i
+
+DataTable (TC_Temp,True,-1)
+  DataInterval (0,60,Sec,10)
+  Average (1,air_temp(),FP2,False)
+  Maximum (1,air_temp(),FP2,False,False)
+  Minimum (1,air_temp(),FP2,False,False)
+endtable
+
+'Main Program
+BeginProg
+	Scan (30,Sec,0,0)
+    PanelTemp (int_temp,250)
+    PortSet (1,1)
+    
+    For i = 1 To Mux_Chans
+    PulsePort (2,10000)
+    TCDiff (air_temp(i),1,mV2_5C,1,TypeT,int_temp,True ,0,250,1.0,0)
+    Next i 
+    
+    PortSet (1,0)
+    calltable (TC_Temp)
+    
+	NextScan
+EndProg
+

@@ -1,0 +1,30 @@
+'CR1000 Series Datalogger
+
+Public Air_Temp
+Public Air_Temp_Alarm
+
+' data table
+DataTable (OneMin,True,-1)
+  DataInterval (0,1,Min,10)
+  Average (1,Air_Temp,FP2,False)
+  Maximum (1,Air_Temp,FP2,False,False)
+  Minimum (1,Air_Temp,FP2,False,False)
+EndTable 
+
+'Main Program
+BeginProg
+  Air_Temp_alarm = 27
+	Scan (1,Sec,0,0)
+	  
+  VoltSe (Air_Temp,1,mV2500,2,1,0,_50Hz,0.1,-40) 'measure air temp 107 on ch SE1
+  
+  If Air_Temp > Air_Temp_Alarm Then 
+  PortSet (8,1 )
+    Else
+      Portset (8,0)
+  EndIf 
+
+  CallTable OneMin
+	NextScan
+EndProg
+

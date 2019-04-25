@@ -1,0 +1,89 @@
+' CR1000 Series Datalogger
+'
+' Program Name: Training.CR1
+' Author: Simon Leeds, CSA
+' Date: August 31, 2005
+'
+' Program details:
+'==================
+' This program is written for use in CRBasic programming training courses.
+' It uses the CR1000 logger to measure air temperature (via a T - type thermocouple).
+' An LED is switched ON or OFF based on the temperature when compared with a setpoint.
+' Switch closures on a push button switch are also monitored and recorded.
+'
+' Declare Public Variables
+'==========================
+Public Int_Temp As Float			' Float is the default data type for the CR1000.
+Public Air_Temp As Float
+Public Batt_Volt As Float
+Public Switch_Count
+Public Flag(8) As Boolean
+Public Alarm
+Public Count
+
+Units Int_Temp = degreesC
+Units Air_Temp = degreesC
+Units Batt_Volt = volts
+
+StationName = Training_CR1000
+
+' Declare Other Variables
+'=========================
+
+
+' Declare Constants
+'===================
+
+
+' Define Data Tables
+'====================
+DataTable(OneMin,TRUE,-1)
+	DataInterval(0,1,min,5)
+	Average(1,Air_Temp,IEEE4,0)
+	FieldNames("Average_AirTemp")
+	Maximum(1,Air_Temp,IEEE4,0,0)
+	FieldNames("Maximum_AirTemp")
+	Minimum(1,Air_Temp,IEEE4,0,0)
+	FieldNames("Minimum_AirTemp")
+	Totalize(1,Switch_Count,IEEE4,0)
+	FieldNames("Total_Switch")
+EndTable
+
+' Define Subroutines
+'====================
+
+
+' Main Program
+'==============
+
+
+BeginProg
+
+	Alarm = 25		' The temperature setpoint that will be used to control the switching of the LED.
+
+	Scan (1,Sec,0,0)
+
+    ' Measure the panel temperature as a reference for the thermocouple measurement.
+		PanelTemp(Int_Temp,250)
+
+    ' Measure the thermocouple output and put the temperature in a public variable.
+		TCDiff (Air_Temp,1,mV2_5C,5,TypeT,Int_Temp,True ,0,250,1.0,0)
+
+		' Record the number of switch closures into a public variable.
+		PulseCount(Switch_Count,1,1,2,0,1,0)
+
+		' Measure the battery voltage of the system.
+		Battery(Batt_Volt)
+
+		' Control the LED based on temperature.
+    If Air_Temp >= Alarm Then
+      PortSet(8,1)
+    Else
+      PortSet(8,0)
+    EndIf
+    		 
+		' Call the data table to store data.
+		CallTable OneMin
+
+	NextScan
+EndProg

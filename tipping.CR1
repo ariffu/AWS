@@ -1,0 +1,33 @@
+'CR1000 Series Datalogger
+
+
+Public rain
+Public tot10min
+Dim raintrack
+
+
+DataTable (tenmin,raintrack=600,-1)
+  DataInterval (0,10,Min,10)
+  EndIf
+  
+DataTable (RainTip,True,1000)
+  Sample (1,rain,FP2)
+  EndTable
+
+BeginProg
+	Scan (1,Sec,0,0)
+	  
+PulseCount (rain,1,1 ,2,0,0.2,0) ' measure rain gauge on p1 0.2 mm/tip
+
+If rain <> 0 Then 'if there has been rain
+CallTable rainTip ' call the raintip table
+EndIf
+
+'calc
+AvgRun (tot10min,1,rain,600) ' calculer running ave over 10 min
+tot10min = tot10min * 600 ' multiply the running everage by the number of sample to get
+
+
+	NextScan
+EndProg
+

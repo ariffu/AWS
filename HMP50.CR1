@@ -1,0 +1,35 @@
+'CR1000 Series Datalogger
+
+Public Air_Temp
+Public RH
+Public WindDir
+Public RH_alarm
+
+' data table
+DataTable (LimaMin,True,-1)
+  DataInterval (0,5,Min,10)
+  Average (1,Air_Temp,FP2,False)
+  Maximum (1,Air_Temp,FP2,False,False)
+  Minimum (1,Air_Temp,FP2,False,False)
+  Average (1,RH,FP2,False)
+EndTable 
+
+'Main Program
+BeginProg
+  RH_alarm = 80
+	Scan (1,Sec,0,0)
+	  
+  VoltSe (RH,1,mV2500,1,1,0,_50Hz,0.1,0) ' mengukur RH di ch SE1
+  VoltSe (Air_Temp,1,mV2500,2,1,0,_50Hz,0.1,-40) 'mengukur suhu udara di ch SE2
+  
+  If RH > RH_alarm Then 
+  PortSet (8,1 )
+    Else
+      Portset (8,0)
+  EndIf 
+
+BrHalf (WinDir,1,mV2500,5,Vx1,1,2500,True ,0,250,1.0,0)
+  CallTable LimaMin
+	NextScan
+EndProg
+

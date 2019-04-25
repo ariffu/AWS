@@ -1,0 +1,506 @@
+'*****************************************************************************************
+'CR1000 Series Datalogger
+'date of modification : 12/08/2016
+'program author       : irm, bmkg
+'programmer           : dwi agus soeprapto
+'*****************************************************************************************
+
+'WIRING DIAGRAM ##########################################################################
+'+=============+=================+==================+
+'| Wire Colour | Function        | CR1000 Connection|	
+'+=============+=================+==================+
+'| WIND SENSOR (Anemometer)                         |
+'+-------------+-----------------+------------------+
+'| RM.Young - 03002 Wind Sentry                     |
+'+-------------+-----------------+------------------+
+'| Red         | Wind Spd Sig.   | P1               |  
+'| Black       | Wind Spd Ref.   | AG               |
+'| Clear       | Shield          | AG               | 
+'| Green       | Wind Dir Sig.   | SE16             |  
+'| White       | Wind Dir Excite | VX1              |   
+'+-------------+-----------------+------------------+
+'| RM.Young - 05103 Wind Monitor (Marine)           |
+'+-------------+-----------------+------------------+
+'| Merah       | Wind Spd Sig.   | P1               |  
+'| Biru        | Wind Spd Ref.   | AG               |
+'| Hijau       | Wind Dir Sig.   | SE8              |  
+'| Putih       | Wind Dir Excite | VX1              |
+'| Hitam       | Wind Dir Ref.   | AG               |
+'+=============+=================+==================+
+'| TEMP & RH SENSOR                                 |
+'+-------------+-----------------+------------------+ 
+'| Vaisala - HMP 155A                               |
+'+-------------+-----------------+------------------+ 
+'| White       | Temp Sig.       | SE2              |  
+'| Yellow      | RH   Sig.       | SE1              |  
+'| Green       | Signal Ref      | AG               |  
+'| Blue        | Power           | 12V              |  
+'| Red         | Power Ground    | G                |  
+'+=============+=================+==================+
+'| PRESSURE SENSOR (Barometer)                      |
+'+-------------+-----------------+------------------+
+'| Vaisala - PTB110                                 |
+'+-------------+-----------------+------------------+
+'| Green       | VOUT/TX         | SE04             |			               
+'| Red         | PWR             | 12V              |			               
+'| Black       | PWR Ground      | G                |
+'| White       | Signal GND      | AG               |
+'| Clear       | Signal GND      | AG               |
+'+=============+=================+==================+
+'| SOLAR RADIATION (Pyranometer)                    |
+'+-------------+-----------------+------------------+
+'| Kipp&Zonen - SP Lite                             |
+'+-------------+-----------------+------------------+
+'| Red         | Signal          | Def3(H)          | 
+'| Blue        | Signal Ref      | Def3(L)          |  
+'| Black       | Signal GND      | AG               |
+'+=============+=================+==================+
+'| RAIN GAUGE SENSOR                                |
+'+-------------+-----------------+------------------+
+'| Tipping Bucket                                   |
+'+-------------+-----------------+------------------+
+'| Red         | Signal          | P2               | 
+'| Black       | Signal Return   | G                |
+'+=============+=================+==================+
+'| WATER LEVEL SENSOR                               |
+'+-------------+-----------------+------------------+
+'| Judd / Nova                                      |
+'+-------------+-----------------+------------------+
+'| Merah       | PWR +           | 12V              |
+'| Clear       | PWR Ground      | G                |
+'| Hitam       | Signal Ground   | AG               |
+'| Hijau       | Sensor Enable   | 5V               |
+'| Putih       | Output          | SE7              |
+'| Coklat      | Tidak terpakai (Diff)              |
+'| SETING :                                         |
+'| Jumper 1 & 2 = 0 s.d 5V                          |
+'| Switch ON :                                      |
+'| 1 - Free run mode                                |
+'| 3 - Temperature compensation disable             |
+'+=============+=================+==================+
+'| WATER TEMP SENSOR                                |
+'+-------------+-----------------+------------------+
+'| Campbell - 109                                   |
+'+-------------+-----------------+------------------+
+'| Black       | WT Excite       | VX2              |
+'| Red         | VOUT            | SE16             |
+'| Purple      | Signal GND      | AG               |
+'| Clear       | Shield          | AG               |
+'+=============+=================+==================+
+'| MODEM                                            |
+'+-------------+-----------------+------------------+
+'| Sierra - FXT009                                  |
+'+-------------+-----------------+------------------+
+'| Kabel data bawaan modem
+'| Ungu        | TX              | Com2 TX (C3)     |
+'| Coklat      | RX              | Com2 RX (C4)     |
+'| Kuning      | G               | G                |
+'| Kabel power
+'| Red         | Power           | SW12V            |
+'| Black       | Ground          | G                |
+'+=============+=================+==================+
+
+
+'DEKLARASI TABEL PUBLIC, SATUAN/UNIT, DIMENSI, DAN CONSTANTA #############################
+
+'LOGGER
+'------
+Public PTemp             'Internal pannel temperature
+Public batt_volt         'Battery voltage
+
+'WIND SENSOR
+'-----------
+Public WS_meas           'Wind speed dari sensor
+Public WD_meas           'Wind direction dari sensor
+Public WS_knot           'Formula konversi m/s ke knots
+
+Units WS_meas = m/s      'm/s satuan dari pembacaan sensor
+Units WD_meas = deg      'degrees satuan dari pembacaan sensor
+Units WS_knot = knots    'knots satuan hasil konversi
+
+'TEMP & RH SENSOR
+'----------------
+Public TA_meas           'Temperature dari sensor 
+Public RH_meas           'Relative Humidity dari sensor
+Public DP_meas           'Dew Point hasil perhitungan dari input Temp dan RH
+
+Units TA_meas = degC     '
+Units RH_meas = %        '
+Units DP_meas = degC     '
+
+'PRESSURE SENSOR
+'---------------
+Public PA_meas           'Barometer dari sensor
+Public PA_QFE            'Formula barometer diukur dari tinggi permukaan runway atau station ke sensor
+Public PA_QNH            'Formula barometer diukur dari sea level dengan pemukaan landasan
+Public PA_QFF            'Formula barometer diukur dari sea level dengan permukaan stasiun
+ 
+Units PA_meas = mbar     '
+Units PA_QFE = mbar      '
+Units PA_QNH = mbar      '
+Units PA_QFF = mbar      '
+
+Dim xQFE                 '--+-> Dimensi kalkulasi yang tidak ditampilkan dalam tabel
+Dim dQNH                 '  |
+Dim xQNH                 '  |
+Dim xQFF                 '--+
+
+Const ALTITUDE = 4       'Altitude of the site above sea level in m ()
+Const SENSORLEVEL = 1.2  'Pressure sensor height from station or runway level in m
+
+'SOLAR RADIATION SENSOR
+'----------------------
+Public SR_meas           'Solar Radiation dari sensor
+Units SR_meas = W/m2     '
+
+'RAIN GAUGE SENSOR
+'-----------------
+Public PR_meas           'Hujan dari sensor (sesaat)
+Public PR_meas_Total     'Formula total hujan 24 jam
+
+Units PR_meas = mm       '
+Units PR_meas_Total = mm '
+
+'WATER LEVEL SENSOR
+'------------------
+Public WL_meas           'Water Level dari sensor
+Public WL_Total          'Formula WL sesuai dengan nilai PASUT Dehidros TNI-AL
+
+Units WL_Total = m       '
+Units WL_meas = m        '
+
+'WATER TEMP SENSOR
+'-----------------
+Public WT_meas           'Water Temperature
+Units WT_meas = degC     '
+
+'MODEM
+'-----
+
+
+
+'DATA OUTPUT
+'-----------
+Public tenmenit_out (9)
+Public menit_out (16)
+Public tensec_out (16)
+Public display_out As String * 100
+Public menit_msg_out As String * 100
+Public tenmenit_msg_out As String * 100
+Public time (9)
+Public days As String, months As String, years As String
+Public hours As String, minutes As String, seconds As String
+Public avTA_out As String
+Public avRH_out As String 
+Public avPA_out As String
+Public avSR_out As String
+Public avWT_out As String
+Public avWL_out As String
+Public avWL_Total As String
+Public avWSmeas_out As String
+Public avWDmeas_out As String
+Public tot_ch_out As String
+ 
+'Declare Constants
+Const scan_rate = 10
+'Const CR=CHR(13)
+'Const LF=CHR(10)
+'Const CRLF=CR+LF
+
+'TABEL ###################################################################################
+DataTable (tensec,1,-1)
+  DataInterval (0,10,Sec,10)
+  Average (1,TA_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,SR_meas,IEEE4,False)
+  Average (1,WS_meas,IEEE4,False)
+  Average (1,WD_meas,FP2,False)
+  Average (1,WT_meas,IEEE4,False)
+  Average (1,WL_meas,IEEE4,False)
+  Average (1,WL_Total,IEEE4,False)
+  Sample (1,PR_meas,FP2)
+  Sample (1,PR_meas_Total,FP2)
+  Average (1,WS_knot,IEEE4,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_QFE,IEEE4,False)
+  Average (1,PA_QFF,IEEE4,False)
+  Average (1,PA_QNH,IEEE4,False)
+EndTable
+
+DataTable (menitan,1,-1)
+  DataInterval (0,1,Min,10)
+  Average (1,TA_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,SR_meas,FP2,False)
+  Average (1,WS_meas,IEEE4,False)
+  Average (1,WD_meas,FP2,False)
+  Average (1,WT_meas,IEEE4,False)
+  Average (1,WL_meas,IEEE4,False)
+  Average (1,WL_Total,IEEE4,False)
+  Sample (1,PR_meas,FP2)
+  Sample (1,PR_meas_Total,FP2)
+  Average (1,WS_knot,IEEE4,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_QFE,IEEE4,False)
+  Average (1,PA_QFF,IEEE4,False)
+  Average (1,PA_QNH,IEEE4,False)
+EndTable
+
+DataTable (menitsms,1,-1)
+  DataInterval (0,10,Sec,10)
+  Average (1,TA_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,PA_meas,IEEE4,False)
+  Average (1,SR_meas,IEEE4,False)
+  Sample (1,PR_meas,FP2)
+  Sample (1,PR_meas_Total,FP2)
+EndTable
+
+
+'PROGRAM UTAMA ###########################################################################
+BeginProg
+  
+  'Open port com
+  SerialOpen (Com1,9600,0,0,100)
+  SerialOpen (Com2,9600,0,0,100)
+  SerialOpen (Com3,9600,0,0,100)
+
+  Scan(scan_rate,Sec,1000,0)  'Start scan
+
+    'Pemecahan unsur waktu
+    RealTime (time())
+    days = FormatFloat (time(3),"%02.0f")
+    months = FormatFloat (time(2),"%02.0f")
+    years = FormatFloat (time(1),"%02.0f")
+    hours = FormatFloat (time(4),"%02.0f")
+    minutes = FormatFloat (time(5),"%02.0f")
+    seconds = FormatFloat (time(6),"%02.0f")
+
+    'LOGGER ==============================================================================
+    PanelTemp (PTemp,250)
+    Battery (batt_volt)
+    PortSet (9,1)             'port SW12V Modem on
+    
+    
+    'WIND SENSOR =========================================================================
+    '1. RM.Young - 03002 Wind Sentry
+    '-------------------------------
+        'Wind speed
+        'PulseCount (WS_meas,1,1 ,1,1,0.75,0.2)
+        'If WS_meas <= 0.2 Then WS_meas = 0  'jika output nilai default, dijadikan 0 (nol)
+       
+        'Wind direction
+        'BrHalf (WD_meas,1,mV2500,16,Vx1,1,2500,True ,0,_50Hz,352,0)
+        'If WD_meas >= 360 OR WD_meas <0 Then WD_meas = 0
+      
+    '2. RM.Young - 05103 Wind Monitor (Marine)
+    '-----------------------------------------
+        'Wind speed
+         PulseCount (WS_meas,1,1 ,1,1,0.172,0.34)'0.098,1
+         If WS_meas <= 1 Then WS_meas = 0  'jika output nilai default, dijadikan 0 (nol)
+
+        'wind direction
+         BrHalf (WD_meas,1,mV2500,8,Vx1,1,2500,True ,0,_50Hz,352,0)
+         If WD_meas >= 360 OR WD_meas <0 Then WD_meas = 0 'Correction for wind direction.
+
+    '3. Formula tambahan
+    '-------------------
+        'Konversi m/s ke knots   
+        WS_knot = WS_meas * 1.942 ' convert m/s to knots 
+    
+
+    'TEMP & RH SENSOR ====================================================================
+    '1. Vaisala - HMP155A
+    '--------------------
+        'Temperature
+        'VoltSe (TA_meas,1,mV2500,2,0,0,_50Hz,0.02,-40)
+        VoltSe (TA_meas,1,mV2500,2,0,0,_50Hz,0.1,-40)
+        'VoltSe (TA_meas,1,mV5000,2,0,0,_50Hz,0.02,-40)      
+        'VoltSe (TA_meas,1,mV5000,2,0,0,_50Hz,0.1,-40)
+            
+        'RH
+        'VoltSe (RH_meas,1,mV2500,1,0,0,_50Hz,0.02,0)
+        VoltSe (RH_meas,1,mV2500,1,0,0,_50Hz,0.1,0)
+        'VoltSe (RH_meas,1,mV5000,1,0,0,_50Hz,0.02,0)
+        'VoltSe (RH_meas,1,mV5000,1,0,0,_50Hz,0.1,0)
+
+    '2. RM.Young - ?????????
+    '-----------------------
+        '???????????????
+      
+    '3. Formula tambahan
+    '-------------------
+	      'RH
+        If RH_meas<0 Then RH_meas=0
+	      If RH_meas>100 AND RH_meas<108 Then RH_meas=100
+
+        'Dew point
+        DewPoint (DP_meas,TA_meas,RH_meas)
+	    
+      
+    'PRESSURE SENSOR =====================================================================
+    '1. Vaisala - PTB110
+    '-------------------
+         'VoltSe (PA_meas,1,mv5000,6,0,0,_50Hz,0.12,500)
+         VoltSe(PA_meas,1,mV5000,4,True,0,_50Hz,0.12,499.475) 
+
+    '2. RM.Young - 61302V
+    '--------------------
+        '?????????????????????
+
+    '3. Formula tambahan
+    '-------------------
+        'Tekanan dihitung berdasar ketinggian sensor tekanan dari landasan atau level stasiun dan suhu udara    
+        xQFE = SENSORLEVEL/(7996+(0.0086*SENSORLEVEL)+(29.33*TA_meas))
+        PA_QFE = PA_meas*(EXP(1)^xQFE)
+    
+        'Perhitungan berdasar altitude dan standar tekanan permukaan laut yang mengacu pada ICAO standard atmosphere
+        dQNH = 0.19025*(LN(PA_QFE/1013.2315))
+        xQNH = 0.03416*ALTITUDE*(1-dQNH)/(288.2+0.00325*ALTITUDE)
+        PA_QNH = PA_QFE * (EXP(1)^xQNH)
+    
+        'Tekanan dihitung berdasar Altitude dan suhu udara
+        xQFF = ALTITUDE/(7996+(0.0086*ALTITUDE)+(29.33*TA_meas))
+        PA_QFF = PA_QFE*(EXP(1)^xQFF)
+
+    'SOLAR RADIATION SENSOR ==============================================================
+    '1. Kipp & Zonen - SP Lite
+    '-------------------------
+        VoltDiff (SR_meas,1,mV250 ,3,True,0,_50Hz,14.27,0) 'in W/m2 multiplier measurement =  1000/C, C= Sensitivity
+	      If SR_meas<0 Then SR_meas=0
+    
+    'RAIN SENSOR =========================================================================
+    '1. Tipping bucket 0.1mm
+    '-----------------------
+        'PulseCount (PR_meas,1,2,2,0,0.1,0)
+        
+    '2. Tipping bucket 0.2mm
+    '-----------------------
+        PulseCount (PR_meas,1,2,2,0,0.2,0)
+    
+    '3. Formula tambahan
+    '-------------------
+        PR_meas_Total = PR_meas + PR_meas_Total  'Penjumlahan jurah hujan
+        
+    'WATER LEVEL SENSOR ==================================================================
+    '1. Judd
+    '-------
+        'VoltSe(WL_meas,1,mV5000,7,True,0,_50Hz,0.00176,0.3)
+        VoltSe(WL_meas,1,mV5000,7,True,0,_50Hz,0.0018,0.3)
+    
+    '2. Formula tambahan
+    '-------------------
+        WL_Total=1.6-WL_meas  'Nilai output disesuaikan dengan nilai PASUT Dehidros TNI-AL
+
+    'WATER TEMP SENSOR ===================================================================
+    '1. Campbell 109
+    '---------------
+        Therm109(WT_meas,1,16,2,0,_50Hz,0.95,0.0)
+
+    
+
+    'KIRIM DATA KE TABEL #################################################################
+        CallTable tensec
+        CallTable menitsms
+        CallTable menitan
+
+    'SETING RESET ########################################################################
+    'Reset hujan
+        If TimeIntoInterval (0,86400,Sec) Then 'Reset hujan pada jam 00 menit 00 detik 00 
+          PR_meas = 0        'Takaran hujan = 0
+          PR_meas_Total = 0  'Jumlah takaran hujan = 0
+        EndIf
+     
+    'Reset modem power
+         If TimeIntoInterval (1,1440,Min) Then
+           PortSet (9,0)  '9 port SW12V off di jam 00 menit 00
+         EndIf
+  
+'KIRIM DATA KE DISPLAY ###################################################################
+
+     'data tensec out
+     If tensec.output (1.1) Then
+     GetRecord (tensec_out(),tensec,1)
+     days = FormatFloat (time(3),"%02.0f")
+     months = FormatFloat (time(2),"%02.0f")
+     years = FormatFloat (time(1),"%02.0f")
+     hours = FormatFloat (time(4),"%02.0f")
+     minutes = FormatFloat (time(5),"%02.0f")
+     seconds = FormatFloat (time(6),"%02.0f")
+     avTA_out = FormatFloat (tensec_out(1),"%1.1f")
+     avRH_out = FormatFloat (tensec_out(2),"%1.1f")
+     avPA_out = FormatFloat (tensec_out(3),"%1.1f")
+     avSR_out = FormatFloat (tensec_out(4),"%1.1f")
+     avWSmeas_out = FormatFloat (tensec_out(5),"%1.1f")
+     avWDmeas_out = FormatFloat (tensec_out(6),"%1.0f")
+     avWT_out     = FormatFloat (tensec_out(7),"%1.1f")
+     avWL_out = FormatFloat (tensec_out(9),"%1.1f")
+     tot_ch_out   = FormatFloat (tensec_out(11),"%1.1f")
+     'Compile
+     	display_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avTA_out+","+avRH_out+","+avPA_out+","+avSR_out+","+tot_ch_out+","+avWL_out+","+avWT_out+CHR(10)+CHR(13)
+          
+      'display_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avWT_out+","+avRH_out+","+avPA_out+","+avSR_out+","+tot_ch_out+CHR(10)+CHR(13)
+      'tensec_msg_out = avWSmeas_out+" "+avWDmeas_out+" "+avTA_out+" "+avRH_out+" "+avPA_out+" "+tot_ch_out+" "+0+" " +0+" "+0+" "+0+" "+ CHR(13) + CHR(10)     
+      SerialOut (Com1,display_out,"",0,100)
+      EndIf
+
+
+
+'KIRIM DATA KE MODEM #####################################################################
+     If menitan.output (1.1) Then
+     GetRecord (menit_out(),menitan,1)
+     days = FormatFloat (time(3),"%02.0f")
+     months = FormatFloat (time(2),"%02.0f")
+     years = FormatFloat (time(1),"%02.0f")
+     hours = FormatFloat (time(4),"%02.0f")
+     minutes = FormatFloat (time(5),"%02.0f")
+     seconds = FormatFloat (time(6),"%02.0f")
+     avTA_out = FormatFloat (menit_out(1),"%1.1f")
+     avRH_out = FormatFloat (menit_out(2),"%1.1f")
+     avPA_out = FormatFloat (menit_out(3),"%1.1f")
+     avSR_out = FormatFloat (menit_out(4),"%1.1f")
+     avWSmeas_out = FormatFloat (menit_out(5),"%1.1f")
+     avWDmeas_out = FormatFloat (menit_out(6),"%1.0f")
+     avWT_out = FormatFloat (menit_out(7),"%1.1f")
+     avWL_out = FormatFloat (menit_out(8),"%1.1f")
+     avWL_Total  = FormatFloat (menit_out(9),"%1.1f")
+     tot_ch_out = FormatFloat (menit_out(10),"%1.1f")
+	
+     menit_msg_out = avWSmeas_out+" "+avWDmeas_out+" "+avTA_out+" "+avRH_out+" "+avPA_out+" "+tot_ch_out+" "+avSR_out+" " +0+" "+avWT_out+" "+avWL_Total+" "+CHR(10)+CHR(13)
+	'display_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avTA_out+","+avRH_out+","+avPA_out+","+avSR_out+","+tot_ch_out+CHR(10)+CHR(13)
+          
+
+   SerialOut (Com2,menit_msg_out,"",0,100)     
+     EndIf
+       
+'KIRIM DATA KE ..... #####################################################################
+      If menitsms.output (1.1) Then
+     GetRecord (tenmenit_out(),menitsms,1)
+     days = FormatFloat (time(3),"%02.0f")
+     months = FormatFloat (time(2),"%02.0f")
+     years = FormatFloat (time(1),"%02.0f")
+     hours = FormatFloat (time(4),"%02.0f")
+     minutes = FormatFloat (time(5),"%02.0f")
+     seconds = FormatFloat (time(6),"%02.0f")
+     avTA_out = FormatFloat (tenmenit_out(1),"%1.1f")
+     avRH_out = FormatFloat (tenmenit_out(2),"%1.1f")
+     avPA_out = FormatFloat (tenmenit_out(3),"%1.1f")
+     avSR_out = FormatFloat (tenmenit_out(4),"%1.1f")
+     avWT_out = FormatFloat (tenmenit_out(7),"%1.1f")
+     avWL_out = FormatFloat (tenmenit_out(8),"%1.1f")
+     avWSmeas_out = FormatFloat (tenmenit_out(5),"%1.1f")
+     avWDmeas_out = FormatFloat (tenmenit_out(6),"%1.0f")
+     tot_ch_out = FormatFloat (tenmenit_out(9),"%1.1f")
+     'Compile
+     tenmenit_msg_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avTA_out+","+avRH_out+","+avPA_out+","+avSR_out+","+avWT_out+","+avWL_out+","+tot_ch_out+CHR(10)+CHR(13)
+     'SerialOut (SMSPORT,"AT+CMGS="+smsphone+CRLF,"> ",1,100)
+     'SerialOut (COMM2,tenmenit_msg_out,"",1,10)
+     'SerialOut (SMSPORT,CHR(26),"CMGS:",1,100)
+        EndIf
+
+    '====================================
+  NextScan
+EndProg
+

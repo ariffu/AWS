@@ -1,0 +1,85 @@
+'CR1000 Series Datalogger
+
+'-------------------------------
+' Program Name : Multiplexer.CR1
+' Date : September 1, 2005
+' Author : Simon Leeds, CSA
+'-------------------------------
+' This program demonstrates how the logger can be configured to control a multiplexer.
+' Multiplexers allow a single set of logger measurement channels to be used to measure a large number of sensors.
+' In this example, we are measuring differential voltage output sensor on the 250mV range.
+' The 32 sensors are measured on Diff Channel 3 (via the multiplexer).
+' Wiring
+' CR1000 - AM16-32 (set to 2x32 mode)
+'------------------------------------
+' C1    - RES
+' C2    - CLK
+' 12V   - 12V
+' G     - G
+' SE5   - COM ODD H
+' SE6   - COM ODD L
+
+'Declare Constants
+
+'-------------------------------
+
+'Declare Public Variables
+Public Flag(8) as Boolean
+Public Meas(32)
+
+'-------------------------------
+
+'Declare Other Variables
+Dim i
+
+'-------------------------------
+
+'Define Data Tables
+
+'-------------------------------
+
+'Define Subroutines
+
+'-------------------------------
+
+'Main Program
+
+BeginProg
+
+	Scan (1,Sec,0,0)
+
+		' Every minute, set Flag 1 so we make a measurement.
+		If TimeintoInterval(0,1,min) then 
+			Flag(1) = True
+		EndIf
+		
+		' If Flag 1 is true, measure the sensors that are on the multiplexer.
+		If Flag(1) then
+
+			' Turn the multiplexer ON.
+			PortSet(1,1)
+
+      ' Loop of 32 for 32 multiplexer channels.
+			For i = 1 to 32 
+				' Switch the multiplexer to the next channel.
+				PulsePort(2,10000)
+				' Allow a delay for switch bounce and for the sensor output to stablize.
+				Delay(0,10,msec)
+				' Measure the sensor on the current channel.
+				VoltDiff(Meas(i),1,mV250,3,True,0,250,1,0)		
+			' End of loop.
+			Next i
+			
+			' Turn the multiplexer OFF.			
+			PortSet(1,0)
+			
+			' Set Flag 1 low, so we don't run this every time.
+			Flag(1) = False
+			
+		EndIf
+
+	NextScan
+
+EndProg
+
+

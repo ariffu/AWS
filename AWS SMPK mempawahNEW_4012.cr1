@@ -1,0 +1,318 @@
+'CR1000
+'Created Wiranto <Meteo Nusantara Instrumen>
+'INDONESIA
+
+'Const comport=Comrs232
+Dim wir
+Dim OutStat As Boolean
+Dim LastFileName As String * 50
+Dim data_gab As String * 500
+Dim data_ftp As String * 500
+Dim hasil As String * 500
+Dim gab(160) As String
+Dim a,b
+'===============
+    Dim waktuftp(27)
+
+    Dim f_WS As String          '1
+    Dim f_WS_max As String    '2
+    Dim f_WindDir As String               '3
+    Dim f_TC As String          '4
+    Dim f_TC_min As String    '5
+    Dim f_TC_max As String    '6
+    Dim f_RH As String                    '7
+    Dim f_BP As String        '8
+    Dim f_Rain As String       '9
+    Dim f_SlrW As String           '10
+    Dim f_SlrW_max As String    '11
+    'Totalize(1,SlrMJ,IEEE4,False)      
+    Dim f_PAR As String        '12
+
+
+Dim f_TS_BS_5 As String
+Dim f_TS_BS_0 As String
+Dim f_TS_BS_m5 As String
+Dim f_TS_BS_m10 As String
+Dim f_TS_BS_m20 As String
+Dim f_TS_BS_m50 As String
+Dim f_TS_BS_m100 As String
+Dim f_TS_TS_5 As String
+Dim f_TS_TS_0 As String
+Dim f_TS_TS_m5 As String
+Dim f_TS_TS_m10 As String
+Dim f_TS_TS_m20 As String
+Dim f_TS_TS_m50 As String
+Dim f_TS_TS_m100 As String
+
+
+'===============
+Dim time (9)
+Dim hari As String, bln As String, thn As String
+Dim jam As String, mnt As String, dtk As String
+
+Public BattV
+Public PTemp_C
+Public WS_ms
+Public WindDir
+Public AirTC
+Public RH
+Public BP_mbar
+Public SlrW
+Public SlrMJ
+Public Rain_mm
+Public PAR_Den
+Public PAR_Tot
+Public hujan_24
+
+Const CS230_SDI12_Port_gundul=7
+Const CS230_SDI12_Port_rumput=5
+Const jumlah =7
+Public Suhu_Tnh_Rumput(jumlah) As Float
+Public Suhu_Tnh_Gundul(jumlah) As Float
+Dim k2 As Long, k1 As Long
+
+'=====================================
+Dim menit_out (26)
+Dim D_batt As String, T_Logger As String , D_Speed As String, D_arah As String, D_Temp As String, D_RH As String
+Dim D_Tek As String, D_Rad As String, D_CH As String, D_Par As String
+Dim D_G1 As String, D_G2 As String, D_G3 As String, D_G4 As String, D_G5 As String, D_G6 As String, D_G7 As String
+Dim D_R1 As String, D_R2 As String, D_R3 As String, D_R4 As String, D_R5 As String, D_R6 As String, D_R7 As String
+Dim menit_data_out As String *500      
+
+Units BattV=Volts
+Units PTemp_C=Deg C
+Units WS_ms=meters/second
+Units WindDir=degrees
+Units AirTC=Deg C
+Units RH=%
+Units BP_mbar=mbar
+Units SlrW=W/m^2
+Units SlrMJ=MJ/m^2
+Units Rain_mm=mm
+Units PAR_Den=umol/s/m^2
+Units PAR_Tot=mmol/m^2 C
+Units hujan_24=mm
+
+Const OutputPort = com2
+Const modem = com1
+
+
+DataTable(Menit10,True,-1)
+    'TableFile ("USR:sta4010",13,-1,0,2,Min,OutStat,LastFileName)
+    DataInterval(0,10,Min,10)
+    'Minimum(1,BattV,FP2,False,False)
+    Average(1,WS_ms,FP2,False)          '1
+    Maximum(1,WS_ms,FP2,False,False)    '2
+    Sample(1,WindDir,FP2)               '3
+    Average(1,AirTC,FP2,False)          '4
+    Minimum(1,AirTC,FP2,False,False)    '5
+    Maximum(1,AirTC,FP2,False,False)    '6
+    Sample(1,RH,FP2)                    '7
+    Average(1,BP_mbar,FP2,False)        '8
+    'Totalize(1,Rain_mm,FP2,False)       '9
+    Sample(1,hujan_24,FP2)
+    
+    Average(1,SlrW,FP2,False)           '10
+    Maximum(1,SlrW,FP2,False,False)    '11
+    'Totalize(1,SlrMJ,IEEE4,False)      
+    Average(1,PAR_Den,FP2,False)        '12
+    'Totalize(1,PAR_Tot,IEEE4,False)
+    Average (jumlah, Suhu_Tnh_Gundul(),IEEE4,false)
+    Average (jumlah, Suhu_Tnh_Rumput(),IEEE4,false)
+EndTable
+
+DataTable(harian,True,-1)
+    DataInterval(0,24,Hr,10)
+    Minimum(1,PTemp_C,FP2,False,False)
+    Minimum(1,WS_ms,FP2,False,False)
+    Average(1,WS_ms,FP2,False)
+    Maximum(1,WS_ms,FP2,False,False)
+    Sample(1,WindDir,FP2)
+    Minimum(1,AirTC,FP2,False,False)
+    Average(1,AirTC,FP2,False)
+    Maximum(1,AirTC,FP2,False,False)
+    Sample(1,RH,FP2)
+    Average(1,BP_mbar,FP2,False)
+    Average (jumlah, Suhu_Tnh_Gundul(),IEEE4,false)
+    Average (jumlah, Suhu_Tnh_Rumput(),IEEE4,false)
+EndTable
+
+
+Function ConvertNumToSDI12address(address As Long) As String * 1
+          Select Case address
+            Case 0 To 9 
+            Return(CHR(address + 48))
+            Case 10 To 35
+            Return(CHR(address + 55))
+            Case 36 To 61
+            Return(CHR(address + 61))
+          EndSelect
+           Return("")
+EndFunction 
+
+BeginProg  
+ 
+   SerialOpen (OutputPort,9600,0,0,100)
+Scan(10,Sec,1,0)
+
+ RealTime (time())
+  hari = FormatFloat (time(3),"%02.0f")
+  bln = FormatFloat (time(2),"%02.0f")
+  thn = FormatFloat (time(1),"%0004.0f")
+  jam = FormatFloat (time(4),"%02.0f")
+  mnt = FormatFloat (time(5),"%02.0f")
+  dtk = FormatFloat (time(6),"%02.0f")
+  
+  
+Battery(BattV)
+PanelTemp(PTemp_C,_60Hz)
+PulseCount(WS_ms,1,1,1,1,0.098,0)
+'If WS_ms = "NAN" Then WS_ms =0
+BrHalf(WindDir,1,mV2500,1,1,1,2500,True,0,_60Hz,355,0)
+If WindDir>=360 OR WindDir<0 Then WindDir=0
+'If WindDir = "NAN" Then WindDir =0
+'VoltSe(AirTC,1,mV2500,2,0,0,_60Hz,0.14,-80)
+'VoltSe(RH,1,mV2500,3,0,0,_60Hz,0.1,0)
+'If RH>100 AND RH<108 Then RH=100
+
+
+'HC2S3 (constant power) Temperature & Relative Humidity Sensor measurements 'AirTC' and 'RH'
+		VoltSe(AirTC,1,mV2500,2,0,0,_60Hz,0.1,-40)
+		'If AirTC = "NAN" Then AirTC =0
+		VoltSe(RH,1,mV2500,3,0,0,_60Hz,0.1,0)
+		If RH>100 AND RH<103 Then RH=100
+		'If RH = "NAN" Then RH =0
+
+PortSet(6,1)
+VoltSe(BP_mbar,1,mV2500,4,1,0,_60Hz,0.240,500)
+'If BP_mbar = "NAN" Then BP_mbar =0
+
+VoltDiff(SlrW,1,mv250,3,True,0,_60Hz,1,0)
+If SlrW<0 Then SlrW=0
+SlrMJ=SlrW*7.987221E-05
+'If SlrW = "NAN" Then SlrW =0
+SlrW=SlrW*15.97444
+
+PulseCount(Rain_mm,1,2,2,0,0.1,0)
+hujan_24 = hujan_24 + Rain_mm
+
+VoltDiff(PAR_Den,1,mV25,4,True,0,_60Hz,1,0)
+If PAR_Den<0 Then PAR_Den=0
+'If PAR_Den = "NAN" Then PAR_Den =0
+PAR_Tot=PAR_Den*1.36378
+PAR_Den=PAR_Den*272.756
+
+For k1 = 1 To jumlah
+  SDI12Recorder (Suhu_Tnh_Gundul(k1),CS230_SDI12_Port_gundul,ConvertNumToSDI12address(k1),"R0!",1.0,0)
+  Next
+
+For k2 = 1 To jumlah
+  SDI12Recorder (Suhu_Tnh_Rumput(k2),CS230_SDI12_Port_rumput,ConvertNumToSDI12address(k2),"R0!",1.0,0)
+  Next
+
+'==========================================
+
+Dim i
+a = Len(data_gab)
+For i = 1 To a
+  gab(i) =   "3"+Mid (data_gab,a-(a-i),1)
+  If gab(i) = "3;" Then gab(i) = "3b"
+  If gab(i) = "3." Then gab(i) = "2e"
+  If gab(i) = "3/" Then gab(i) = "2f"
+  If gab(i) = "3:" Then gab(i) = "3a"
+  If gab(i) = "3-" Then gab(i) = "2d"
+  If gab(i) = "3N" Then gab(i) = "30"
+  If gab(i) = "3A" Then gab(i) = "30"
+  hasil = hasil+gab(i)
+  Next
+
+ data_ftp = hasil
+  b=Len(data_ftp)
+  
+ hasil=""
+ If TimeIntoInterval (0,86400,Sec) Then  
+    hujan_24 = 0
+    EndIf
+
+'CallTable(menit)
+CallTable(Menit10)
+'CallTable(jaman)
+CallTable(harian)
+
+
+ 
+
+NextScan
+
+
+
+SlowSequence
+
+      Scan (10,min,1,0)
+      
+       SW12(1)
+       Delay(0,45,sec)
+     GetRecord (waktuftp(),Menit10,1)
+              'rtime = FormatFloat (menit_out(1),"%02.0f")
+     hari = FormatFloat (time(3),"%02.0f")
+     bln = FormatFloat (time(2),"%02.0f")
+     thn = FormatFloat (time(1),"%02.0f")
+     jam = FormatFloat (time(4),"%02.0f")
+     mnt = FormatFloat (time(5),"%02.0f")
+     dtk = FormatFloat (time(6),"%02.0f")
+     
+    f_WS = FormatFloat (waktuftp(1),"%02.1f")          '1
+    f_WS_max = FormatFloat (waktuftp(2),"%02.1f")   '2
+    f_WindDir = FormatFloat (waktuftp(3),"%003.0f")               '3
+    f_TC = FormatFloat (waktuftp(4),"%02.1f")   '4
+    f_TC_min = FormatFloat (waktuftp(5),"%02.1f")    '5
+    f_TC_max = FormatFloat (waktuftp(6),"%02.1f")    '6
+    f_RH = FormatFloat (waktuftp(7),"%003.0f")                    '7
+    f_BP = FormatFloat (waktuftp(8),"%0004.1f")        '8
+    f_Rain = FormatFloat (waktuftp(9),"%003.1f")       '9
+    f_SlrW = FormatFloat (waktuftp(10),"%0004.0f")           '10
+    f_SlrW_max = FormatFloat (waktuftp(11),"%0004.0f")    '11
+    f_PAR = FormatFloat (waktuftp(12),"%0004.0f")        '12
+    f_TS_BS_5 = FormatFloat (waktuftp(13),"%02.1f")
+    f_TS_BS_0 = FormatFloat (waktuftp(14),"%02.1f")
+    f_TS_BS_m5 = FormatFloat (waktuftp(15),"%02.1f")
+    f_TS_BS_m10 = FormatFloat (waktuftp(16),"%02.1f")
+    f_TS_BS_m20 = FormatFloat (waktuftp(17),"%02.1f")
+    f_TS_BS_m50 = FormatFloat (waktuftp(18),"%02.1f")
+    f_TS_BS_m100 = FormatFloat (waktuftp(19),"%02.1f")
+    f_TS_TS_5 = FormatFloat (waktuftp(20),"%02.1f")
+    f_TS_TS_0 = FormatFloat (waktuftp(21),"%02.1f")
+    f_TS_TS_m5 = FormatFloat (waktuftp(22),"%02.1f")
+    f_TS_TS_m10 = FormatFloat (waktuftp(23),"%02.1f")
+    f_TS_TS_m20 = FormatFloat (waktuftp(24),"%02.1f")
+    f_TS_TS_m50 = FormatFloat (waktuftp(25),"%02.1f")
+    f_TS_TS_m100 = FormatFloat (waktuftp(26),"%02.1f")
+
+
+    'hasil=""
+    LastFileName = "sta4012"+hari+bln+thn+jam+mnt+".txt"
+    data_gab =  hari +"/"+ bln +"/"+thn +";"+ jam +":"+ mnt +":"+ dtk +";"+ f_Rain  +";"+ f_WS +";"+ f_WS_max +";"+ f_WindDir +";"+ f_TC_max +";"+ f_TC +";"+ f_TC_min  +";"+ f_RH  +";"+ f_BP +";"+ f_SlrW +";"+ f_SlrW_max  +";"+ f_PAR +";"+ f_TS_BS_5  +";"+ f_TS_BS_0 +";"+ f_TS_BS_m5  +";"+ f_TS_BS_m10 +";"+ f_TS_BS_m20 +";"+ f_TS_BS_m50 +";"+ f_TS_BS_m100 +";"+ f_TS_TS_5 +";"+ f_TS_TS_0  +";"+ f_TS_TS_m5 +";"+ f_TS_TS_m10  +";"+ f_TS_TS_m20 +";"+ f_TS_TS_m50  +";"+ f_TS_TS_m100
+
+SerialOut (OutputPort,data_gab ,"",0,100)
+SerialOpen (modem,115200,0,0,1000)
+SerialOut (modem,"AT+WOPEN=0" + CHR(13) + CHR(10),"",3,1000)
+SerialOut (modem,"AT+WOPEN=1" + CHR(13) + CHR(10),"OK",5,500)
+SerialOut (modem,"AT+WIPCFG=1" + CHR(13) + CHR(10),"OK",5,100)
+SerialOut (modem,"AT+WIPBR=1,6" + CHR(13) + CHR(10),"OK",5,100)
+SerialOut (modem,"at+wipbr=2,6,11," + CHR(34) + "internet" + CHR(34) + CHR(13) + CHR(10),"OK",5,100)
+SerialOut (modem,"at+wipbr=2,6,0," + CHR(34) + "" + CHR(34) + CHR(13) + CHR(10),"OK",5,100)
+SerialOut (modem,"at+wipbr=2,6,1," + CHR(34) + "" + CHR(34) + CHR(13) + CHR(10),"OK",5,100)
+SerialOut (modem,"AT+WIPBR=4,6,0" + CHR(13) + CHR(10),"OK",5,100)
+SerialOut (modem,"at+wipcreate=4,1,"+ CHR(34) + "202.90.198.212" + CHR(34)+"," + "21" +"," +CHR(34)+"aaws"+CHR(34)+","+CHR(34)+"aaws"+CHR(34)+ CHR(13) + CHR(10),"OK",5,500)
+SerialOut (modem,"at+wipfile=4,1,6,"+ CHR(34) + LastFileName + CHR(34) + CHR(13) + CHR(10),"OK",5,500)
+SerialOut (modem,"at+wipdatarw=1,1,"+ CHR(34) + data_ftp + CHR(34) + CHR(13) + CHR(10),"OK",5,500)
+SerialClose (modem)
+   ' OutStat =0
+   
+  SW12(0)
+NextScan
+
+
+EndProg
+
+

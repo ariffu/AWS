@@ -1,0 +1,81 @@
+'CR1000 Series Datalogger
+
+'-------------------------------
+' Program Name : Fullstop.CR1
+' Date : September 1, 2005
+' Author : Simon Leeds, CSA
+'-------------------------------
+' The FullStop is a sensor which has a relay (switch closure output) which changes state when the sensor becomes wet or dry.
+' It is used to determine when soil is saturated so irrigation can be shut down.
+' The switch switch is connected between C8 and 5V, so the control port (C8) will be pulled high, when the switch is closed (sensor is dry)
+' When the sensor becomes wet, the switch opens and the control port (C8) is low.
+' Using this as an input, we can determine when the sensor changes state and record the time of each change in the logger memory.
+' WIRING
+' Wire 1 - 5V
+' Wire 2 - C8
+
+'Declare Constants
+
+'-------------------------------
+
+'Declare Public Variables
+Public DryLasttime as Boolean
+Public DryNow as Boolean
+
+'-------------------------------
+
+'Declare Other Variables
+
+'-------------------------------
+
+'Define Data Tables
+DataTable(StoreDry,TRUE,100)
+	Sample(1,DryNow,Boolean)
+	FieldNames("DryNow")
+EndTable
+
+DataTable(StoreWet,TRUE,100)
+	Sample(1,DryNow,Boolean)
+	FieldNames("DryNow")
+EndTable
+'-------------------------------
+
+'Define Subroutines
+
+'-------------------------------
+
+'Main Program
+
+BeginProg
+
+	Scan (1,Sec,0,0)
+
+		' Read the status of port 8. Put the result in the boolean variable DryNow.
+		DryNow = CheckPort(8)
+
+		' If the sensor is dry, check if it has just changed from wet to dry.
+		If DryNow then
+		
+			If DryLastTime = False then
+				' If the sensor has just changed from wet to dry, store the time when it changed.
+				CallTable StoreDry
+				' Update the lasttime variable, so we can detect the next change correctly.
+				DryLastTime = True
+			EndIf
+			
+		Else ' If the sensor is wet, check if it has just changed from dry to wet.
+		
+			If DryLastTime = True then
+				' If the sensor has just changed from dry to wet, store the time when it changed.
+				CallTable StoreWet
+				' Update the lasttime variable, so we can detect the next change correctly.
+				DryLastTime = False
+			EndIf
+			
+		EndIf		
+
+	NextScan
+
+EndProg
+
+

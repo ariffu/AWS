@@ -1,0 +1,48 @@
+'======================================================================================
+' Program Name : SDI12_Sensor.CR1
+' Date : 16 February 2006
+' Author : Simon Leeds, CSA
+'======================================================================================
+
+' === WIRING ==========================================================================
+'
+' C7    SDI-12 Signal
+' G     SDI-12 Reference
+'
+' === DECLARATIONS ====================================================================
+SequentialMode
+
+' -- Public Variables -----------------------------------------------------------------
+Public Ptemp                ' The datalogger panel temperature
+Public BattVolt             ' The datalogger battery voltage
+Public SDI12Source(5)       ' Simulated data to be transmitted over SDI-12
+
+' === PROGRAM START ===================================================================
+BeginProg
+	
+  ' === MAIN SCAN =====================================================================
+	Scan (5,Sec,3,0)
+		' Check the panel temperature
+		PanelTemp (Ptemp,250)
+    ' Check the battery voltage
+    Battery (BattVolt)		
+    ' Update the SDI-12 Source Data
+    SDI12Source(1) = Ptemp
+    SDI12Source(2) = BattVolt
+    SDI12Source(3) = Public.Record(1,1)
+	NextScan
+
+  ' === SLOW SEQUENCE 1 ===============================================================
+
+	' Our slow sequence scan
+	SlowSequence
+	Do
+		' Wait here for a measure command
+		SDI12SensorSetup (5,7,0,2)
+		' Send back the data on a dump command
+		SDI12SensorResponse (SDI12Source())
+	Loop
+
+EndProg
+
+

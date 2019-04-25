@@ -1,0 +1,74 @@
+'CR1000 Series Datalogger
+
+'Declare Public Variables
+
+PreserveVariables
+
+Public Int_Temp As Float
+Public batt_volt As Float
+Public PortonFlag As Boolean ' boolean menandakan bisa true atau false
+Public Air_Temp
+Public Switch_Count
+Public switch_24hr
+
+
+'Public Alarm
+
+'Define Constant
+Const Alarm = 26
+Const Comport = COM1
+
+'Define Data Tables
+DataTable (Satu_Min,True,-1)
+  DataInterval (0,60,Sec,10)
+  Average (1,Air_Temp,FP2,False)
+  Maximum (1,Air_Temp,FP2,False,False)
+  Minimum (1,Air_Temp,FP2,False,False)
+  Totalize (1,Switch_Count,FP2,False)
+EndTable
+
+DataTable (Harian,True,160)
+  DataInterval (8,24,Hr,10)
+  Minimum (1,batt_volt,FP2,False,False)
+  Maximum (1,Int_Temp,FP2,False,False)
+  Average (1,Air_Temp,FP2,False)
+  Maximum (1,Air_Temp,FP2,False,False)
+  Minimum (1,Air_Temp,FP2,False,False)
+  Totalize (1,Switch_Count,FP2,False)
+EndTable
+
+'Main Program
+BeginProg
+  '  Alarm = 26     ' alarm set point to compare temp
+  Scan (1,Sec,0,0)
+    PanelTemp (Int_Temp,_50Hz) 'panel temp measurement
+    Battery (batt_volt)        'Battery voltage measurement
+    TCDiff (Air_Temp,1,mV2_5C,5,TypeT,Int_Temp,True,0,_50Hz,1.0,0) 'Type T thermocouple meas on diff
+    PulseCount (Switch_Count,1,1 ,2,0,0.2,0) ' Switch count on pulse channel
+    switch_24hr = switch_24hr + Switch_Count
+
+
+
+    If Air_Temp >= Alarm Then      ' if the air temp rises above 26 then
+      PortSet (8,1 )              ' turn on the LED
+    Else                        ' otherwise
+      PortSet (8,0)             ' turn off the LED
+    EndIf
+
+    If Air_Temp >= Alarm
+      PortonFlag = NOT PortonFlag ' false = true, supaya setelah mencapai alarm, lampu hidup dan mati bergantian
+      PortSet (8,PortonFlag)
+    Else
+      PortSet (8,0)
+    EndIf
+
+    CallTable Satu_Min    ' memanggil tabel menitan
+    CallTable Harian      ' memanggil tabel harian
+    
+    If TimeIntoInterval(7,24,hr) Then ' pada jam 7 pagi setiap hari
+      switch_24hr = 0 ' akan kembali ke 0
+    EndIf
+
+  NextScan
+EndProg
+

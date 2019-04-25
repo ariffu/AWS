@@ -1,0 +1,67 @@
+' CR1000 Series Datalogger
+'
+' Program Name: 4-20mA.CR1
+' Author: Simon Leeds, CSA
+' Date: August 31, 2005
+'
+' Program details:
+'==================
+' This program is written for use in CRBasic programming training courses.
+' It demonstrates how to use the CR1000 logger to measure a 4-20ma output sensor.
+'
+' Declare Public Variables
+'==========================
+Public Raw_mV as Float
+Public Final_Value as Float
+Public Batt_Volt as Float
+
+' Declare Other Variables
+'=========================
+Dim Multiplier
+
+' Declare Constants
+'===================
+Const ResValue = 100							' The value (in ohms) if the shunt resistor being used.
+Const SensRange = 10							' The range of the sensor (Engineering Units) - Could be ppm, metres, dB, anything.
+
+' Define Data Tables
+'====================
+DataTable(OneMin,TRUE,-1)
+	DataInterval(0,1,min,5)
+	Sample(1,Final_Value,IEEE4)
+	FieldNames("Current_Level")
+EndTable
+
+' Define Subroutines
+'====================
+
+
+' Main Program
+'==============
+
+
+BeginProg
+
+	' Calculation of the multipllier is done here as we only need to do it once and use it for all measurements.
+	' the multiplier is calculated from Sensor Range/mV output range.
+	' This gives a multiplier in units of sensor units/mV. We measure the sensor output as mV and we can apply the multiplier to get engineering units.
+	Multiplier = SensRange/((20*ResValue)-(4*ResValue))
+	
+	Scan (1,Sec,0,0)
+
+		' Measure the sensor output(mV). The measurement range must be selected in conjunction with the Resistor value such that:
+		' ResValue x 20mA <= mVRange.
+		' The resistor will be connected between G and the SE channel specified in the Voltse instruction.
+		Voltse(Raw_mV,1,mV2500,1,1,0,250,1,0)
+
+		' Convert the measurement inot engineering unit by applying the multiplier.
+		Final_Value = (Raw_mV - 4*ResValue) * Multiplier
+
+		' Measure the battery voltage of the system.
+		Battery(Batt_Volt)
+		 
+		' Call the data table to store data.
+		CallTable OneMin
+
+	NextScan
+EndProg

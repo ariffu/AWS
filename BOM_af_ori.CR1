@@ -1,0 +1,359 @@
+'============================================
+' CR1000 Series Datalogger
+' Program Name:
+' Date:  22/11/2010
+' Program Author: Gavin Hewitt, CSA
+'Revision : Wiranto, PT. TATA AQUARINDO P
+'============================================
+'--------------------------------------------
+' Wiring Diagram:
+
+' Sensor: RMY 03002 Wind Sentry
+' Wire Colour | Function        | CR1000 Connection|
+' Red         | Wind Spd Sig.   | P1               |
+' Black       | Wind Spd Ref.   | AG               |
+' Clear       | Shield          | AG               |
+' Green       | Wind Dir Sig.   | SE1              |
+' White       | Wind Dir Ref.   | AG               |
+' Blue        | Wind Dir Excite | VX1              |
+'
+' 108 Temperature Sensor (Wet Bulb)
+' Black       | Voltage Excite  | VX2              |
+' Red         | Temp Sig.       | SE9              |
+' Purple      | Signal Gnd      | AG               |
+' Clear       | Shield          | AG               |
+'
+' 108 Temperature Sensor (Dry Bulb)
+' Black       | Voltage Excite  | VX3              |
+' Red         | Temp Sig.       | SE10             |
+' Purple      | Signal Gnd      | AG               |
+' Clear       | Shield          | AG               |
+'
+' CS106 PA_meas Sensor
+' Blue        | PA_meas Sig    | SE3              |
+' Yellow      | Sig Ref         | SE4              |
+' Green       | Trigger         | C1               |
+' Red         | PWR             | 12V              |
+' Black       | PWR Ground      | G                |
+' Clear       | Shield          | AG               |
+
+' Li200x Pyranometer
+' Red         | Signal          | SE5              |
+' Black       | Signal Ref      | SE6              |
+' White       | Signal GND      | AG               |
+' Clear       | Shield          | AG               |
+
+' NR-Lite Net Radiometer
+' Red         | Rad Sig.        | SE7              |
+' Blue        | Signal Ref      | SE8              |
+' Jumper from SE8 to AG            |               |
+'                                  AG              |
+' Clear       | Shield          | AG               |
+
+' CS700 Tipping Bucket PR_meas Gauge
+' Black       | Signal          | P2               |
+' White       | Signal Return   | G                |
+' Clear       | Shield          | AG               |
+'--------------------------------------------
+'Declare Public Variables
+'Example:
+Const OUTPUTPORT = ComRS232
+Public PTemp    'Internal pannel temperature
+Public batt_volt'Battery voltage
+Public WS_meas  'Wind speed
+Public WD_meas  'Wind direction
+Public TA1_meas 'Wet Bulb Thermistor
+Public TA2_meas 'Dry Bulb Thermistor
+Public RH_meas  'Relative Humidity measurement
+Public PA_meas  'Barometric Pressure
+Dim QFF_offset
+Public PA_QFF   'Barometric Pressure adjusted to sea level
+Public SR_meas  'Solar Radiation
+Public SlrMJ    'Solar Radiation in MJ/m2
+Public SD       'Sunlight duration per 24 hours
+Dim NR_Wm2
+Public NR_meas  'Net Radiation Measurement
+
+Public PR_meas  'Rain measurement
+Public RainIntensity5min  '5 minute rainfall intensity
+Dim rfAvg                 'Running average to calculate intensity
+Public rain10min          '10 minute intensity
+Public rainHourly         '60 min intensity
+Dim DisableRainfall_10 As Boolean
+Dim DisableRainfall_Hour As Boolean
+
+Public PR_meas_Total 'Total Rain
+Public DP_meas  'Dew Point
+Dim VAP_Pres
+Dim SAT_VP
+'=========
+
+'DEKLARASI RH CREATED PT TATA AQUARINDO PERKASA
+Dim ea
+Dim esbk
+Dim esbb
+Dim rh
+Public ws_knot
+'=========
+'DEKLARASI PERBAIKAN CURAH HUJAN
+Dim hujan
+Dim ch
+'=========
+
+Public PTemp_str    'Internal pannel temperature
+Public batt_str'Battery voltage
+Public WS_str  'Wind speed
+Public WD_str  'Wind direction
+Public TA1_str 'Wet Bulb Thermistor
+Public TA2_str 'Dry Bulb Thermistor
+Public RH_str  'Relative Humidity measurement
+Public PA_str  'Barometric Pressure
+
+Public PA_QFF_str   'Barometric Pressure adjusted to sea level
+Public SR_str  'Solar Radiation
+Public SlrMJ_str    'Solar Radiation in MJ/m2
+Public SD_str       'Sunlight duration per 24 hours
+Public NR_str  'Net Radiation Measurement
+Public PR_str  'Rain measurement
+Public RainIntensity5min_str  '5 minute rainfall intensity
+Public rain10min_str          '10 minute intensity
+Public rainHourly_str         '60 min intensity
+Public PR_meas_Total_str 'Total Rain
+Public counter
+Public StrtoSend As String *200
+
+'Declare Other Variables
+'Example:
+'Dim Counter
+
+'Declare Constants
+Const scan_rate = 1
+Const NRLite_Cal = 1000/13.1  'Calibration constant shipped with the NR-Lite  --> Cal constant is the denominator x eg: 1000/xx.x
+Const A = 0.021286   'Empirical constand for NR-lite wind correction
+
+
+'====== THESE CONSTANTS NEED TO BE CHANGED TO SITE SPECIFIC VALUES ============
+Const LATITUDE  = 1   ' Latitude of the site
+Const LONGTITUDE = 1  'Longitude of the site
+Const ALTITUDE = 55    'Altitude of the site above sea level in m (NAGARA, BALI)
+
+'Define Data Tables
+DataTable (L0,1,-1)
+  DataInterval (0,10,Min,10)
+  Average (1,TA1_meas,FP2,False)
+  Average (1,TA2_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_meas,FP2,False)
+  Average (1,PA_QFF,FP2,False)
+  Average (1,SR_meas,FP2,False)
+  Average (1,NR_meas,FP2,False)
+  Maximum (1,WS_meas,IEEE4,False,False)
+  Average (1,WS_meas,IEEE4,False)
+  Minimum (1,WS_meas,FP2,False,False)
+ '============================= m/s to knot
+  Maximum (1,ws_knot,IEEE4,False,False)
+  Average (1,ws_knot,IEEE4,False)
+ '==============================
+  Average (1,WD_meas,FP2,False)
+  WindVector (1,WS_meas,WD_meas,IEEE4,False,0,0,0)
+  Sample (1,rain10min * 6,FP2)
+  FieldNames ("RainIntensity:mm/hour")
+  Maximum (1,RainIntensity5min,FP2,DisableRainfall_10,False)
+  
+EndTable
+
+DataTable (L1,1,-1)
+  DataInterval (0,1,Hr,10)
+  Sample (1,PTemp,FP2)
+  Average (1,TA1_meas,FP2,False)
+  Average (1,TA2_meas,FP2,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_meas,FP2,False)
+  Average (1,PA_QFF,FP2,False)
+  Average (1,SR_meas,FP2,False)
+  Average (1,NR_meas,FP2,False)
+  Maximum (1,WS_meas,IEEE4,False,False)
+  Average (1,WS_meas,IEEE4,False)
+  Minimum (1,WS_meas,FP2,False,False)
+ '============================= m/s to knot
+  Maximum (1,ws_knot,IEEE4,False,False)
+  Average (1,ws_knot,IEEE4,False)
+ '==============================
+  Average (1,WD_meas,FP2,False)
+  WindVector (1,WS_meas,WD_meas,IEEE4,False,0,0,0)
+  Sample (1,rainHourly,FP2)
+  FieldNames ("CH_1jam")
+  Maximum (1,RainIntensity5min,FP2,DisableRainfall_Hour,False)
+  
+EndTable
+'================================
+  'DataTable (L2,True,365)
+  'DataInterval (0,24,Hr,10)
+  'Minimum (1,batt_volt,FP2,False,False)
+  'Totalize (1,PR_meas,FP2,False)
+  'Sample (1,SD,FP2)
+  'EndTable
+'================================
+'================================
+DataTable (L2,1,-1)'True,365)
+ ' DataInterval (0,24,Hr,10)
+ ' Minimum (1,batt_volt,FP2,False,False)
+ ' Totalize (1,PR_meas,FP2,False)
+ ' Sample (1,SD,FP2)
+ DataInterval(0,1,Day,10)
+  Sample (1,PTemp,FP2)
+  Average (1,TA1_meas,FP2,False)
+  Average (1,TA2_meas,FP2,False)
+  Maximum(1,TA2_meas,FP2,False,False)
+	Minimum(1,TA2_meas,FP2,False,False)
+  Average (1,RH_meas,FP2,False)
+  Average (1,DP_meas,FP2,False)
+  Average (1,PA_meas,FP2,False)
+  Average (1,PA_QFF,FP2,False)
+  Average (1,SR_meas,FP2,False)
+  Average (1,NR_meas,FP2,False)
+  Maximum (1,WS_meas,IEEE4,False,False)
+  Average (1,WS_meas,IEEE4,False)
+  Minimum (1,WS_meas,FP2,False,False)
+  Average (1,WD_meas,FP2,False)
+  Average (1,ws_knot,IEEE4,False)
+  Maximum (1,ws_knot,IEEE4,False,False)
+  WindVector (1,WS_meas,WD_meas,IEEE4,False,0,0,0)
+  Sample (1,rainHourly,FP2)
+  FieldNames ("RainIntensity:mm/hour")
+  Maximum (1,RainIntensity5min,FP2,DisableRainfall_Hour,False)
+  'tambahan
+  Totalize(1,PR_meas_Total,FP2,False)
+EndTable
+'================================
+'Define Subroutines
+'Sub
+'EnterSub instructions here
+'EndSub
+
+'Main Program
+BeginProg
+  Scan (scan_rate,Sec,0,0)
+    If IfTime(0,10,Min) Then DisableRainfall_10 = True
+    If IfTime(5,10,Min) Then DisableRainfall_10 = False
+    If IfTime(0,60,Min) Then DisableRainfall_Hour = True
+    If IfTime(5,60,Min) Then DisableRainfall_Hour = False
+
+    PanelTemp (PTemp,250)
+    Battery (batt_volt)
+
+    '03002 Measurements
+    PulseCount (WS_meas,1,1 ,1,1,0.75,0.2)
+    If WS_meas <0.21 Then WS_meas = 0 'If windspeed is below the threshold then it is zero
+    ws_knot = WS_meas * 1.83 ' konversi m/s ke knots
+    
+    BrHalf (WD_meas,1,mV2500,1,Vx1,1,2500,True ,0,250,352,0)
+    If WD_meas >= 360 OR WD_meas <0 Then WD_meas = 0 'Correction for wind direction.
+
+    'Temperature Measurments
+    Therm108 (TA1_meas,1,9,Vx2,0,250,1.0,0)  'Dry bulb temperature measurement
+    Therm108 (TA2_meas,1,10,Vx3,0,250,1.0,0.2) 'Wet bulb temperature measurement
+
+    WetDryBulb (VAP_Pres,TA2_meas,TA1_meas,PA_meas) 'Calculate the vapour pressure from the wet and dry bulb measurements
+    SatVP (SAT_VP,TA2_meas) 'Calculate the saturated vapour pressure from the dry bulb measurement
+
+    'Rearrange  VP=RH*SVP/100 to calculate humidity
+    ''''RH_meas = (VAP_Pres * 100) / SAT_VP 'formula campbell
+    'formula PT TATA AQUARINDO
+    esbb = 6.1078  *  EXP (17.239 * TA1_meas/(TA1_meas + 237.3))
+    ea  = esbb - 0.661 * (TA2_meas - TA1_meas)
+    esbk = 6.1078  *  EXP (17.239 * TA2_meas / (TA2_meas + 237.3))
+    rh = (ea / esbk) * 100
+    RH_meas = rh  -10'OFFSET KALIBRASI
+
+    'Calculate Dew Point
+    DewPoint (DP_meas,TA1_meas,RH_meas)
+
+    'CS106 Pressure Measurement
+    If TimeIntoInterval(0,10,Sec) Then
+      PortSet (1,1)
+      Delay(0,1,Sec)
+      VoltDiff (PA_meas,1,mV2500,2,True ,0,250,0.240,501.7928)
+      PortSet(1,0)
+    EndIf
+    'Using Altitude, calculate Barometric Pressure offset To adjust pressure To sealevel
+    QFF_offset = (1013.25*(1-(1-(ALTITUDE/44307.69231))^5.25328))  'calculate sealevel adjustment
+    PA_QFF = PA_meas + QFF_offset  'Calculate Barometric pressure corrected for sea level
+
+
+    'Li200X Measurement
+    VoltDiff (SR_meas,1,mV7_5C,3,True ,0,250,1.0,0)
+    If SR_meas<0 Then SR_meas=0 'Set Negaitive Values to Zero
+
+    SlrMJ = SR_meas*(scan_rate* 0.0002) 'Convert mV to MJ/m2 for the scan interval
+    SR_meas=SR_meas*200 'Convert mV to W/m2
+
+    'NR-Lite Measurement
+    VoltDiff (NR_Wm2,1,mV25C,4,True ,0,250,100,0)
+    If WS_meas >= 5 Then                            'If the windspeed is greater than 5m/s then apply the correction.
+      NR_meas = NR_Wm2*(1+A*(WS_meas-5))
+    Else
+      NR_meas = NR_Wm2                              'If the windspeed is less than 5m/s then apply no correction.
+    EndIf
+
+    SD = Timer (1,Sec,4) 'Keep a timer of the Sunshine duration
+
+
+    If NR_Wm2 > 120 Then  'If the sunlight passes the WMO 2003 standard (120 W/m2) then start the timer, if it drops below it then stop the timer.
+      Timer (1,Sec,0 )
+    Else
+      Timer (1,Sec,1)
+    EndIf
+
+    'CS700 Measurement
+    PulseCount (PR_meas,1,2,2,0,0.2,0)
+    PR_meas_Total = PR_meas + PR_meas_Total  'Keep a running total of the PR_meas experienced by the station.
+    ch=PR_meas+ch
+    hujan =PR_meas+hujan
+    '=================
+    'keep 10 minute rainfall total
+        ''''    rain10min += PR_meas
+    rain10min = ch
+    '=================
+    'keep hourly rainfall total
+     ''''''  rainHourly += PR_meas
+    rainHourly = hujan
+    'Take a 5 minute running average
+    AvgRun (rfAvg,1,PR_meas,300)
+    'Calculate the rainfall intensity in mm/hour
+    RainIntensity5min = rfAvg * 300 * 12
+
+    CallTable L0
+    CallTable L1
+    CallTable L2
+    '====================================
+    If TimeIntoInterval (0,24,Hr) Then  'At midnight of each day, stop and reset the SD timer.
+    Timer (1,Sec,3)
+    EndIf
+
+    If IfTime(0,10,Min) Then 
+    rain10min = 0 
+    ch=0
+    EndIf
+    If IfTime(0,60,Min) Then 
+    rainHourly = 0
+    hujan=0
+    EndIf
+  
+  If IfTime(0,1,day) Then
+    PR_meas_Total = 0
+    EndIf
+    '====================================
+    
+  NextScan
+EndProg
+
+nsity in mm/hour
+    RainIntensity5min = rfAvg * 300 * 12
+
+    CallTable L0
+    CallTable L1
+    CallTable L2
+    '==========================

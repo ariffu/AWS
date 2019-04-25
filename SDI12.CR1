@@ -1,0 +1,22 @@
+'CR1000 Series Datalogger
+
+
+
+'Declare Public Variables
+Public CS215(2)
+Alias CS215(1) = Temp
+Alias CS215(2) = RH
+
+Public PD(2)
+
+'Define Data Tables
+
+'Main Program
+BeginProg
+	Scan (1,Sec,0,0)
+	SDI12Recorder (CS215(),1,0,"C!",1.0,0) 'measure the cs215 sdi12 address
+	SDI12Recorder (PD(),1,5,"C!",1.0,0)    'measure the pressure tranducer
+	
+	NextScan
+EndProg
+

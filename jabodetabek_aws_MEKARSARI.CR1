@@ -1,0 +1,373 @@
+'*********************************'
+'CR1000 Series Datalogger
+'JABODETABEK AWS
+'date of modification: 10/01/2012
+'Serial Data out one second,one minute and ten minute
+'via com2
+'serial data out ten minute to RS232
+'send data via SMS 
+'Program Author: roy handoko
+'********************************
+'********************************
+'Wiring Diagram:
+'*************************************************************************
+' Sensor: RMY 03002 Wind Sentry
+'-------------|-----------------|------------------|---------------------|
+' Wire Colour | Function        | CR1000 Connection|Jinyang pin connector|	
+'-------------|-----------------|------------------|---------------------|
+' Red         | Wind Spd Sig.   | P1               |  A			 |
+' Black       | Wind Spd Ref.   | AG               | }B			 |
+' Clear       | Shield          | AG               | }B			 |
+' Green       | Wind Dir Sig.   | SE2              |  C			 |
+' White       | Wind Dir Excite | VX1              |  D			 |
+
+' HMP 155a Temperatur and RH sensor
+' White       | Temp Sig.       | SE3              |  A			 |
+' Yellow      | RH   Sig.       | SE1              |  B			 |
+' Green       | Signal Ref.     | AG               |  C			 |
+' Blue        | Power           | 12V              |  D			 |
+' Red         | Power Ground    | G                |  E			 |
+
+' NovaLynx 230-600V Barometric Pressure Sensor
+' White       | VOUT/TX         | SE4              |			 |
+' Green       | Sig Ref         | No connection    |			 |
+' Red         | PWR             | 12V              |			 |
+' Black       | PWR Ground      | G                |			 |
+' Shield      | Reference       | G                |			 |
+
+' SP Lite2 Silicon Pyranometer
+' Red         | Signal          | Def4(H)          |  A			 |
+' Blue        | Signal Ref      | Def4(L)          |  B			 |
+' Black       | Signal GND      | AG               |
+
+' NR-Lite Net Radiometer (optional)
+' Red         | Rad Sig.        | SE8              | 			 |
+' Blue        | Signal Ref      | SE9              |			 |
+' Jumper from SE8 to AG         |                  |			 |
+'                                  AG              |			 |
+' Clear       | Shield          | AG               |			 |
+
+' Tipping Bucket Rain Gauge
+' Red         | Signal          | P2               | A			 |
+' Black       | Signal Return   | G                | B			 |
+
+'*************************************************************************
+'Declare Public Variables
+Public PTemp      
+Public batt_volt  
+Public WS_meas    
+Public WD_meas    
+Public Air_Temp   
+Public RH
+Public tekanan
+Public P_Novalinx
+Public SR_Wm2
+Public Alarm
+Public windalarm
+Public ch
+Public curah_h
+Public ws_knots
+Public ws_kph
+Public windalrm
+Public hujanalrm
+'Public SMSresult
+'Public SMSsent As Boolean
+
+Units ch = mm
+
+'Deklarasi output serial data via com2
+Public detik_out (5)
+Public tenmenit_out (9)
+Public menit_out (9)
+Public hujanalrm_out (2)
+Public windalrm_out (2)
+Public detik_msg_out As String *100
+Public menit_msg_out As String * 100
+Public tenmenit_msg_out As String * 100
+Public hujanalrm_msg_out As String * 100
+Public windalrm_msg_out As String * 100
+Public time (9)
+Public days As String, months As String, years As String
+Public hours As String, minutes As String, seconds As String
+Public avAir_Temp_out As String
+Public avRH_out As String 
+Public avP_Novalinx_out As String 
+Public avSR_Wm2_out As String
+'Public avNR_out As String
+Public avWSmeas_out As String
+Public avWDmeas_out As String
+Public totch_out As String
+
+
+
+
+
+'Declare Other Variables
+'Example:
+'Dim Counter
+
+'Declare Constants
+'Example:
+'CONST PI = 3.141592654
+Const scan_rate = 1
+'No hp terima sms
+Const smsphone="+6287780871486"
+Const smsphone_2="+628153903372"
+Const SMSPORT=ComRS232
+Const CR=CHR(13)
+Const LF=CHR(10)
+Const CRLF=CR+LF
+
+
+'Define Data Tables
+DataTable (detik,True,-1)
+   DataInterval (0,1,Sec,10)
+   Sample (1,WD_meas,FP2)
+   Sample (1,WS_meas,IEEE4)
+   WindVector (1,WS_meas,WD_meas,FP2,False,0,0,4)
+EndTable
+
+DataTable (menitan,1,-1)
+   DataInterval (0,1,Min,10)
+   Average (1,WD_meas,FP2,False)
+   Average (1,WS_meas,IEEE4,False)
+   Average (1,Air_Temp,FP2,False)
+   Average (1,RH,FP2,False)
+   Average (1,P_Novalinx,IEEE4,False)
+   Average (1,SR_Wm2,IEEE4,False)
+   Totalize (1,ch,FP2,False)
+   Sample (1,curah_h,FP2)
+EndTable
+ 
+DataTable (tenmenitan,1,-1)
+   DataInterval (0,10,Min,10)
+   Average (1,WD_meas,FP2,False)
+   Average (1,WS_meas,IEEE4,False)
+   Average (1,Air_Temp,FP2,False)
+   Average (1,RH,FP2,False)
+   Average (1,P_Novalinx,IEEE4,False)
+   Average (1,SR_Wm2,FP2,False)
+   Totalize (1,ch,FP2,False)
+   Sample (1,curah_h,FP2)
+EndTable 
+
+DataTable (wind_alrm,true,-1)
+  DataInterval (0,180,Sec,10)
+  Maximum (1,windalrm,FP2,False,False)
+  
+EndTable
+ 
+DataTable (hujan_alrm,True,-1)
+  DataInterval (0,3600,Sec,10)
+  Sample (1,hujanalrm,FP2)
+EndTable 
+
+'Define Subroutines
+''Sub SMSwindalarm
+  'If windalrm >=20 Then
+  
+  'SerialOut (SMSPORT,"AT+CMGS="+smsphone2+CRLF,"> ",1,100)
+  '''SerialOut (SMSPORT,"Alarm from AWS.  Kecepatan Angin : "+FormatFloat(windalrm,"%3.1f")+" Knots"+CRLF,"",1,10)
+  'SerialOut (SMSPORT,CHR(26),"CMGS:",1,100)
+  'EndIf
+'EndSub
+
+'Sub SMShujanalarm
+  'If hujanalrm >= 10 Then
+    'If hujan_alrm.output (1,1) Then
+    'GetRecord (hujanalrm_out(),hujan_alrm,1)
+    'hujanalrm = FormatFloat(hujanalrm_out(1),"%2.1f")
+    'hujanalrm_msg_out = "Alarm from AWS :"+hujanalrm+CHR(10)+CHR(13)
+  	'SerialOpen (SMSPORT,9600,0,0,100)
+  	'SMSresult=SerialOut (SMSPORT,"AT+CMGS="+smsphone2+CRLF,"> ",1,100)
+ ' If SMSresult <>0 Then
+  	'SerialOut (SMSPORT,"Alarm from AWS.  Kecepatan Angin : "+FormatFloat(hujanalrm,"%3.1f")+" mm/jam"+CRLF,"",1,10)
+  	 'SerialOut (SMSPORT,hujanalrm_sendout,"",1,10)
+ 	'SMSresult=SerialOut (SMSPORT,CHR(26),"CMGS:",1,100)
+  	'SMSsent=SMSresult<>0
+  	'EndIf
+  'EndIf
+  'EndIf
+'EndSub
+
+'Main Program
+BeginProg
+  'SMSsent = True
+  SerialOpen (SMSPORT,9600,0,0,100)
+  SerialOpen (Com2,9600,0,0,100)
+    
+  Scan (scan_rate,Sec,0,0)
+  RealTime (time())
+  days = FormatFloat (time(3),"%02.0f")
+  months = FormatFloat (time(2),"%02.0f")
+  years = FormatFloat (time(1),"%02.0f")
+  hours = FormatFloat (time(4),"%02.0f")
+  minutes = FormatFloat (time(5),"%02.0f")
+  seconds = FormatFloat (time(6),"%02.0f")
+
+	  Alarm = 35
+	  'hujanalarm = 3
+	  windalarm = 45
+	  PanelTemp (PTemp,250)
+    Battery (batt_volt)
+	  'Alarm Batteray volt
+	  If batt_volt >= 10 Then
+	        PortSet (7,1 )
+	      	Else
+	        PortSet (7,0)
+	   EndIf
+	  
+    	  PulseCount (WS_meas,1,1 ,1,1,0.75,0.2)
+    	  	  If WS_meas <0.21 Then WS_meas = 0 
+    	  	  
+    	  ws_knots = WS_meas * 1.942 
+    	  ws_kph = WS_meas * 3.6 
+    	  windalrm = ws_kph
+    
+    	  BrHalf (WD_meas,1,mV2500,2,Vx1,1,2500,True ,0,_50Hz,352,0)
+    	  	  If WD_meas >= 360 OR WD_meas <0 Then WD_meas = 0 
+        PortSet (1,1)
+        'Delay(0,5,Sec)
+	      VoltSe (Air_Temp,1,mV2500,3,0,0,_50Hz,0.098,-40)
+	      VoltSe (RH,1,mV2500,1,0,0,_50Hz,0.1,0)
+	      PortSet (1,0)
+	      If RH<0 Then RH=0
+	      If RH>100 AND RH<108 Then RH=100
+	      
+	      	If Air_Temp > Alarm Then 
+	        	PortSet (8,1 )
+	      	Else
+	        	PortSet (8,0)
+	      	EndIf
+	  
+	      VoltSe (tekanan,1,mv5000,4,False,3000,_50Hz,0.1200,500)
+	      If (IfTime (9,10,min)) Then WriteIO (&B0010,&B0010)
+	      If (IfTime (0,10,min)) Then
+        P_Novalinx = tekanan
+        WriteIO (&B0010,&B0)
+        EndIf
+	      'VoltSe (P,1,mv5000,15,False,3000,_50Hz,0.2551,630)
+		'If (IfTime (59,60,Sec))Then WriteIO (&B1000,) 
+		'If (IfTime (0,60,Sec))Then
+	      
+		'WriteIO (&B1000,P)
+		'EndIf
+	      VoltDiff (SR_Wm2,1,mV2500,4,True ,0,_50Hz,12.658,0)
+	      If SR_Wm2<0 Then SR_Wm2=0
+	      'Delay (0,1000,mSec)
+	      PulseCount (ch,1,2,2,0,0.5,0)
+	      curah_h = ch + curah_h
+	      hujanalrm = ch + hujanalrm
+		'Enter other measurement instructions
+		
+	        If TimeIntoInterval (420,1440,Min) Then  
+    		  'Timer (1,Sec,3)
+    		  ch = 0
+    		  curah_h = 0
+   	      EndIf
+    	      'If IfTime (0,1,Day) Then
+    		  'ch = 0
+    		  'curah_h = 0
+    	      'EndIf
+    	      
+             If IfTime (0,4200,Sec) Then
+             hujanalrm = 0
+             EndIf
+    
+    
+CallTable detik
+CallTable menitan
+CallTable tenmenitan
+CallTable wind_alrm
+CallTable hujan_alrm
+
+       'Ambil data dari tabel detik    
+       If detik.output (1,1) Then
+         GetRecord (detik_out(),detik,1)
+       	 WD_meas = FormatFloat (detik_out(1),"%2.0f")
+     	   WS_meas = FormatFloat (detik_out(2),"%2.1f")
+     	   detik_msg_out = WD_meas+","+WS_meas+CHR(10)+CHR(13)
+     	   SerialOut (Com2,detik_msg_out,"",0,100)
+       EndIf
+       'Ambil data dari tabel menitan
+       If menitan.output (1.1) Then
+     	   GetRecord (menit_out(),menitan,1)
+     	   days = FormatFloat (time(3),"%02.0f")
+     	   months = FormatFloat (time(2),"%02.0f")
+     	   years = FormatFloat (time(1),"%02.0f")
+     	   hours = FormatFloat (time(4),"%02.0f")
+     	   minutes = FormatFloat (time(5),"%02.0f")
+     	   seconds = FormatFloat (time(6),"%02.0f")
+     	   avWDmeas_out = FormatFloat (menit_out(1),"%2.0f")
+         avWSmeas_out = FormatFloat (menit_out(2),"%2.1f")
+     	   avAir_Temp_out = FormatFloat (menit_out(3),"%2.1f")
+     	   avRH_out = FormatFloat (menit_out(4),"%2.1f")
+     	   avP_Novalinx_out = FormatFloat (menit_out(5),"%6.1f")
+     	   avSR_Wm2_out = FormatFloat (menit_out(6),"%2.1f")
+     	   'avNR_out = FormatFloat (menit_out(6),"%2.1f")
+     	   totch_out = FormatFloat (menit_out(8),"%2.1f")
+     	   'Compile
+     	   menit_msg_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avAir_Temp_out+","+avRH_out+","+avP_Novalinx_out+","+avSR_Wm2_out+","+totch_out+CHR(10)+CHR(13)
+     	   SerialOut (Com2,menit_msg_out,"",0,100)
+       EndIf
+       'Ambil data dari tabel 10 menitan
+       If tenmenitan.output (1.1) Then
+     	   GetRecord (tenmenit_out(),tenmenitan,1)
+     	   'GetRecord (menit_out(),hujan,1)
+     	   days = FormatFloat (time(3),"%02.0f")
+     	   months = FormatFloat (time(2),"%02.0f")
+     	   years = FormatFloat (time(1),"%02.0f")
+     	   hours = FormatFloat (time(4),"%02.0f")
+     	   minutes = FormatFloat (time(5),"%02.0f")
+     	   seconds = FormatFloat (time(6),"%02.0f")
+     	   avWDmeas_out = FormatFloat (tenmenit_out(1),"%2.0f")
+         avWSmeas_out = FormatFloat (tenmenit_out(2),"%2.1f")
+     	   avAir_Temp_out = FormatFloat (tenmenit_out(3),"%2.1f")
+     	   avRH_out = FormatFloat (tenmenit_out(4),"%2.1f")
+     	   avP_Novalinx_out = FormatFloat (tenmenit_out(5),"%6.1f")
+     	   avSR_Wm2_out = FormatFloat (tenmenit_out(6),"%2.1f")
+     	   'avNR_out = FormatFloat (menit_out(6),"%2.1f")
+     	   totch_out = FormatFloat (tenmenit_out(8),"%2.1f")
+     	   'Compile
+     	   tenmenit_msg_out = days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+avWDmeas_out+","+avWSmeas_out+","+avAir_Temp_out+","+avRH_out+","+avP_Novalinx_out+","+avSR_Wm2_out+","+totch_out+CHR(10)+CHR(13)
+     	   'kirim data via sms
+         SerialOut (Com2,tenmenit_msg_out,"",0,100)
+     	   SerialOut (SMSPORT,"AT+CMGS="+smsphone+CRLF,"> ",1,100)
+         SerialOut (SMSPORT,tenmenit_msg_out,"",1,10)
+         SerialOut (SMSPORT,CHR(26),"CMGS:",1,100)
+         EndIf
+       
+    'kirim sms alarm hujan
+    If hujan_alrm.output (1,1) Then
+    GetRecord (hujanalrm_out(),hujan_alrm,1)
+    hujanalrm = FormatFloat(hujanalrm_out(1),"%2.1f")
+    hujanalrm_msg_out = "(AWS_Test) Alarm_RR: "+days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+" CURAH HUJAN : "+hujanalrm+" mm/Jam"+CHR(10)+CHR(13)
+    If hujanalrm >= 30 Then
+    Delay (0,3,Sec)
+  	'SerialOpen (SMSPORT,9600,0,0,100)
+  	SerialOut (SMSPORT,"AT+CMGS="+smsphone+CRLF,"> ",1,100)
+    'If SMSresult<>0 Then
+  	'SerialOut (SMSPORT,"Alarm from AWS. Curah Hujan saat ini: "+FormatFloat(hujanalrm,"%3.1f")+" mm/jam"+CRLF,"",1,10)
+  	SerialOut (SMSPORT,hujanalrm_msg_out,"",1,10)
+ 	  SerialOut (SMSPORT,CHR(26),"CMGS:",1,100)
+  	'SMSsent=SMSresult<>0
+  	EndIf
+    EndIf
+  'EndIf
+
+    If wind_alrm.output (1,1) Then
+    GetRecord (windalrm_out(),wind_alrm,1)
+    windalrm = FormatFloat(windalrm_out(1),"%2.1f")
+    windalrm_msg_out = "(AWS_Test) Alarm_WS: "+days+"/"+months+"/"+years+","+hours+":"+minutes+":"+seconds+","+" WIND SPEEED : "+windalrm+" KM/Jam"+CHR(10)+CHR(13)
+    If windalrm >= windalarm Then
+    Delay (0,1,Sec)
+    SerialOut (SMSPORT,"AT+CMGS="+smsphone+CRLF,"> ",1,100)
+    SerialOut (SMSPORT,windalrm_msg_out,"",1,10)
+ 	  SerialOut (SMSPORT,CHR(26),"CMGS:",1,100)
+ 	  windalrm = 0
+ 	  EndIf
+ 	  EndIf
+  NextScan
+     
+EndProg
+

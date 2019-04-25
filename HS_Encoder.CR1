@@ -1,0 +1,92 @@
+' CR1000 Series Datalogger
+'
+' Program Name: HS_Encoder.CR1
+' Author: Simon Leeds, CSA
+' Date: August 31, 2005
+'
+' Program details:
+'==================
+' This program demonstrates the use of the CR1000 logger to monitor water level from a Quadrature Shaft Encoder via QD1.
+' It also shows how a datum setting procedure can be done to correct for a level offset.
+'
+' Wiring:
+' QD1 - CR1000
+' P1  - P1
+' P2  - P2
+' 5V  - 5V
+' G   - G
+'
+' Shaft Encoder - QD1
+' S1  - N/O 1
+' S2  - N/O 2
+' 5V(logger) - COM
+'
+' Declare Public Variables
+'==========================
+Public Flag(8)
+Public Counts(2)
+Public Level
+Public LvlDatum
+Public Level_Raw
+
+Alias Counts(1) = UpCount
+Alias Counts(2) = DownCount
+
+' Declare Other Variables
+'=========================
+Dim Lev_Chg
+Dim Offset
+
+' Declare Constants
+'===================
+Const Encoder_Res = 0.25				' Level (in mm) for one set of pulses from the shaft encoder.
+Const Dev = 1										' Level change (in mm) that will cause a record to be stored.
+
+' Define Data Tables
+'====================
+DataTable(EventLvl,TRUE,2500)
+	Sample(1,Level,IEEE4)
+EndTable
+
+
+' Define Subroutines
+'====================
+
+
+' Main Program
+'==============
+
+
+BeginProg
+	Scan (1,Sec,0,0)
+
+		' Record the pulses that have ocurred since last interval.
+		' The multiplier is Encoder_Res/4 as we get 4 pulse per quadrature output fom the encoder.
+		PulseCount(Counts(),2,1,0,0,Encoder_Res/4,0)
+
+		' Calculate the total change in level since last time.
+		Lev_Chg = UpCount - DownCount
+
+		' Update the level by adding the new counts in the up direction and subtracting the counts in the down direction.
+		Level_Raw = Level_Raw + Lev_Chg
+		
+		' Correct the level by adding the offset.
+		Level = Level_Raw + Offset
+		
+		' If the level has changed by more than the allowable amount, store the level data.
+		If Lev_Chg >= Dev then CallTable EventLvl
+
+		' If Flag 1 has been set, we are calculating a new offset.
+		If Flag(1) then
+			' Check the actual level - staff gauge level and calculate the difference from the actual measured value.
+			Offset = LvlDatum - Level_Raw
+			LvlDatum = 0
+			' Correct the Level by adding the offset.
+			Level = Level_Raw + Offset
+			' Set Flag 1 low so we don't do this again.
+			Flag(1) = False
+		EndIf
+
+	NextScan
+EndProg
+

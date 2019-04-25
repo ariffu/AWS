@@ -1,0 +1,42 @@
+'======================================================================================
+' Program Name : SDI12_Recorder.CR1
+' Date : 16 February 2006
+' Author : Simon Leeds, CSA
+'======================================================================================
+
+' === WIRING ==========================================================================
+'
+' C7    SDI-12 Signal
+' G     SDI-12 Reference
+'
+' === DECLARATIONS ====================================================================
+
+' -- Public Variables -----------------------------------------------------------------
+Public Measure As Boolean    ' Set to TRUE to retrieve data from an SDI-12 Sensor
+Public SDI12Data(5)          ' The results of the data retrieval from an SDI-12 Sensor
+
+' === PROGRAM START ===================================================================
+BeginProg
+
+  ' === MAIN SCAN =====================================================================
+	Scan (1,Sec,3,0)
+
+    ' Every minute, set Measure = TRUE.
+		If TimeIntoInterval(0,1,min) Then
+  		Measure = TRUE
+		EndIf
+
+    ' If the Measure location is TRUE, run the SDI-12 instruction.
+		If Measure = TRUE Then
+
+			' Send the SDI-12 M command to get the sensor make a measurement.		
+			SDI12Recorder (SDI12Data(),7,0,"M!",1.0,0)
+					
+			' Set Measure = FALSE so we only run this code once.
+			Measure = FALSE
+			
+		EndIf
+	NextScan
+EndProg
+
+
